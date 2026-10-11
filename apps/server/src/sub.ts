@@ -23,9 +23,9 @@ export function setSubStaticRoot(root: string): void {
 
 function usageHistory(userId: number) {
   const rows = db
-    .prepare("SELECT ts, total FROM usage_history WHERE user_id = ? ORDER BY ts ASC")
-    .all(userId) as { ts: number; total: number }[];
-  return rows.map((r) => ({ ts: r.ts, total: r.total }));
+    .prepare("SELECT ts, total, up, down FROM usage_history WHERE user_id = ? ORDER BY ts ASC")
+    .all(userId) as { ts: number; total: number; up: number; down: number }[];
+  return rows.map((r) => ({ ts: r.ts, total: r.total, up: r.up, down: r.down }));
 }
 
 function usagePayload(token: string, host: string) {

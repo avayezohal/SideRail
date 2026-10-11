@@ -105,15 +105,21 @@ export function MultiCombobox({
                 remove(selected[selected.length - 1]);
               }
             }}
+            onBlur={() => {
+              if (query.trim()) add(query.trim());
+            }}
             placeholder={selected.length === 0 ? placeholder : ""}
-            className="w-full bg-transparent py-1 text-sm outline-none placeholder:text-text/40"
+            className="w-full bg-transparent px-1 py-1 text-sm outline-none placeholder:text-text/40"
           />
           <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
         </div>
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full overflow-hidden rounded-base border-2 border-border bg-bw neo-shadow animate-pop-in">
+        <div
+          className="absolute z-50 mt-1 w-full overflow-hidden rounded-base border-2 border-border bg-bw neo-shadow animate-pop-in"
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <div className="flex items-center gap-2 border-b-2 border-border/40 px-3 py-2">
             <Search className="h-4 w-4 shrink-0 text-text/50" />
             <span className="text-xs text-text/50">

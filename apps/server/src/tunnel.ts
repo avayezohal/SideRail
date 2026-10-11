@@ -88,7 +88,7 @@ function ipAllowed(inbound: Inbound, ip: string): boolean {
   return !limited;
 }
 
-function pipeToXray(req: IncomingMessage, clientSocket: Socket, head: Buffer, inbound: Inbound) {
+function pipeToCore(req: IncomingMessage, clientSocket: Socket, head: Buffer, inbound: Inbound) {
   const realIp = clientIp(req);
   const upstream = net.connect(inbound.port, "127.0.0.1", () => {
     if (realIp && upstream.localPort) {
@@ -123,7 +123,7 @@ export function attachTunnel(server: Server): void {
       socket.destroy();
       return;
     }
-    pipeToXray(req, socket as Socket, head, inbound);
+    pipeToCore(req, socket as Socket, head, inbound);
   });
 }
 

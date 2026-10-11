@@ -22,8 +22,9 @@ import { seedDefaultRouting } from "./routing.js";
 import { api } from "./routes.js";
 import { sub, setSubStaticRoot } from "./sub.js";
 import { attachTunnel, tryTunnelHttp } from "./tunnel.js";
-import { startXray, collectTraffic, collectClientIps, enforceIpLimits } from "./xray.js";
+import { startCore, collectTraffic, collectClientIps, enforceIpLimits, restartCore } from "./core.js";
 import { applyTrafficReset } from "./users.js";
+import { enforceAdminExpiry } from "./auth.js";
 import { rateLimit } from "./ratelimit.js";
 import { sendDailyBackup } from "./bot.js";
 import { refreshIpInfo } from "./ipinfo.js";
@@ -35,6 +36,7 @@ migrate();
 seedInbounds();
 seedDefaultClient();
 seedDefaultRouting();
+enforceAdminExpiry();
 
 const app = express();
 app.disable("x-powered-by");
@@ -81,7 +83,7 @@ attachTunnel(server);
 
 server.listen(config.port, config.host, async () => {
   console.log(`SideRail listening on http://${config.host}:${config.port}`);
-  await startXray();
+  await startCore();
   void refreshIpInfo();
 });
 
@@ -116,6 +118,14 @@ setInterval(() => {
     /* noop */
   }
 }, 3_600_000);
+
+setInterval(() => {
+  try {
+    if (enforceAdminExpiry()) restartCore();
+  } catch {
+    /* noop */
+  }
+}, 60_000);
 
 let lastBackupDay = new Date().getDate();
 setInterval(() => {

@@ -1,7 +1,7 @@
 {
   "name": "SideRail",
-  "description": "Xray-core VPN management panel — VLESS/VMess/Trojan over WS, XHTTP and HTTPUpgrade. TLS terminated at the Railway edge on port 443.",
-  "tags": ["vpn", "xray", "proxy", "nodejs", "react"],
+  "description": "SideRail — a fast, self-hosted connection management panel with live stats, usage charts and clean subscription pages. One-click deploy on Railway.",
+  "tags": ["dashboard", "nodejs", "react", "typescript", "self-hosted"],
   "services": [
     {
       "name": "siderail",
@@ -14,8 +14,8 @@
           "description": "Secret used to sign admin session cookies. Set a long random string.",
           "generator": "secret"
         },
-        "XRAY_VERSION": {
-          "description": "Xray-core release to download on first boot.",
+        "CORE_VERSION": {
+          "description": "Core engine release to download on first boot.",
           "default": "v26.9.9"
         },
         "SIDERAIL_DATA_DIR": {

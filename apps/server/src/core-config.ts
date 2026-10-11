@@ -78,7 +78,7 @@ function buildRoutingRules(inbounds: Inbound[]) {
   return rules;
 }
 
-export function buildXrayConfig() {
+export function buildCoreConfig() {
   const inbounds = listEnabledInbounds();
   const users = listUsers();
 
@@ -93,7 +93,7 @@ export function buildXrayConfig() {
   }));
 
   return {
-    log: { loglevel: "warning", access: config.xrayAccessLog },
+    log: { loglevel: "warning", access: config.coreAccessLog },
     api: {
       tag: "api",
       services: ["HandlerService", "StatsService", "LoggerService"],
@@ -110,7 +110,7 @@ export function buildXrayConfig() {
       {
         tag: "api",
         listen: "127.0.0.1",
-        port: config.xrayApiPort,
+        port: config.coreApiPort,
         protocol: "dokodemo-door",
         settings: { address: "127.0.0.1" },
       },

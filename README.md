@@ -30,16 +30,11 @@
 <br/>
 <br/>
 
-**A bold, neobrutalist VPN control panel — powered by&nbsp;<a href="https://github.com/XTLS/Xray-core"><img src=".github/badges/link-xray.svg" alt="Xray-core" height="22" valign="middle" /></a>&nbsp;and shipped to&nbsp;<a href="https://railway.app"><img src=".github/badges/link-railway.svg" alt="Railway" height="22" valign="middle" /></a>&nbsp;in one click.**
+**A bold, neobrutalist control panel — shipped to&nbsp;<a href="https://railway.app"><img src=".github/badges/link-railway.svg" alt="Railway" height="22" valign="middle" /></a>&nbsp;in one click.**
 
-*Clean client links. Live stats. Gorgeous subscription pages. No config, no fuss.*
+*Clean dashboards. Live stats. Gorgeous pages. No config, no fuss.*
 
 </div>
-
-<br/>
-
-> [!TIP]
-> **Fork → Deploy on Railway → Expose port `8080` → Open the panel.** Four steps, zero config, live in minutes.
 
 <br/>
 
@@ -51,7 +46,7 @@
 
 **One job, done right**
 
-No feature bloat. SideRail masters **HTTP-based transports behind a TLS edge** — every link is clean, standard, and always `security=tls` on port `443`.
+No feature bloat. SideRail masters **HTTP-based transports behind a TLS edge** — every connection is clean, standard, and always `security=tls` on port `443`.
 
 </td>
 <td width="50%" valign="top">
@@ -67,7 +62,7 @@ A loud **neobrutalist** UI — thick borders, hard shadows, animated icons — t
 
 **Deploy and forget**
 
-Xray-core pulls itself on first boot, the session secret is generated for you, and the DB just works. **Zero environment variables required.**
+The core engine pulls itself on first boot, the session secret is generated for you, and the DB just works. **Zero environment variables required.**
 
 </td>
 <td width="50%" valign="top">
@@ -95,7 +90,7 @@ The Owner adds Admins with scoped page access and personal data quotas — and e
 </tr>
 <tr>
 <td valign="top"><b>Inbounds</b></td>
-<td>Five HTTP inbounds auto-seeded on first boot. Enable or disable only, each with a unique port and <code>/SideRail/...</code> path.</td>
+<td>Five HTTP inbounds auto-seeded on first boot. Enable or disable only, each with a unique port and a random <code>/api/...</code> path.</td>
 </tr>
 <tr>
 <td valign="top"><b>Activity Log</b></td>
@@ -107,11 +102,11 @@ The Owner adds Admins with scoped page access and personal data quotas — and e
 </tr>
 <tr>
 <td valign="top"><b>Subscription</b></td>
-<td>A gorgeous per-user page with a live usage chart, QR codes and a base64 subscription for clients.</td>
+<td>A gorgeous per-user page with a live usage chart, QR codes and a base64 export for clients.</td>
 </tr>
 <tr>
 <td valign="top"><b>Security</b></td>
-<td>JWT sessions, built-in rate limiting, and sniffing fully disabled to prevent the QUIC crash.</td>
+<td>JWT sessions, built-in rate limiting, and sniffing fully disabled for stability.</td>
 </tr>
 </table>
 
@@ -130,7 +125,7 @@ The Owner adds Admins with scoped page access and personal data quotas — and e
 **4. Expose port `8080`** — open **Settings → Networking → Generate Domain**, and set the port to **`8080`**.
 
 > [!IMPORTANT]
-> SideRail listens on port **`8080`** — this is the **only** port you expose. The ports `10085` and `20000–20004` are Xray's internal ports bound to `127.0.0.1`; they are private and must **not** be exposed.
+> SideRail listens on port **`8080`** — this is the **only** port you expose. The ports `10085` and `20000–20004` are the core engine's internal ports bound to `127.0.0.1`; they are private and must **not** be exposed.
 
 **5. Add a volume (optional)** — attach a **Volume** at **`/data`** so users, admins and settings survive redeploys.
 
@@ -146,11 +141,11 @@ The Owner adds Admins with scoped page access and personal data quotas — and e
 |:--|:--|:--|
 | `PORT` | `8080` | HTTP port. **Expose this one on Railway.** |
 | `JWT_SECRET` | *auto* | Signs admin session cookies. Auto-generated and persisted if unset. |
-| `XRAY_VERSION` | `v26.9.9` | Xray-core release fetched on first boot. |
+| `CORE_VERSION` | `v26.9.9` | Core engine release fetched on first boot. |
 | `SIDERAIL_DATA_DIR` | `/data` | Persistent data directory (mount a volume here). |
 | `PUBLIC_DOMAIN` | *auto* | Override for a custom domain. Falls back to `RAILWAY_PUBLIC_DOMAIN`. |
-| `XRAY_API_PORT` | `10085` | Internal Xray stats API port. |
-| `XRAY_INBOUND_BASE_PORT` | `20000` | Base port for internal inbound listeners. |
+| `CORE_API_PORT` | `10085` | Internal core stats API port. |
+| `CORE_INBOUND_BASE_PORT` | `20000` | Base port for internal inbound listeners. |
 
 <br/>
 
@@ -165,10 +160,10 @@ apps/
 │     └─ lib/             API client, auth context, helpers
 └─ server/        Express + Node (node:sqlite) backend
    └─ src/
-      ├─ xray.ts          Binary fetch, process manager, traffic stats, client IPs
-      ├─ xray-config.ts   Config builder (sniffing fully disabled)
+      ├─ core.ts          Binary fetch, process manager, traffic stats, client IPs
+      ├─ core-config.ts   Config builder (sniffing fully disabled)
       ├─ tunnel.ts        WS/HTTPUpgrade via net.Socket, XHTTP via http-proxy
-      ├─ links.ts         VLESS/VMess/Trojan link generation
+      ├─ links.ts         Connection link generation
       ├─ inbounds.ts      Default inbound seeding + enable/disable
       ├─ users.ts         User model, traffic reset, sub-token logic
       ├─ auth.ts          Owner/Admin roles, permissions, sessions
@@ -176,7 +171,7 @@ apps/
       └─ routes.ts        Authenticated REST API
 ```
 
-**How traffic flows** — TLS is terminated at the Railway edge; all client links use `security=tls` on port `443`. The Node process routes **WebSocket/HTTPUpgrade** to Xray via raw `net.Socket`, and **XHTTP** through an HTTP proxy. Only `ws`, `httpupgrade` and `xhttp` are supported — raw TCP, gRPC, WireGuard and Hysteria are intentionally left out because they don't survive the edge.
+**How traffic flows** — TLS is terminated at the Railway edge; all connections use `security=tls` on port `443`. The Node process routes **WebSocket/HTTPUpgrade** to the core engine via raw `net.Socket`, and **XHTTP** through an HTTP proxy. Only HTTP-based transports are supported — anything that can't survive the edge is intentionally left out.
 
 <br/>
 

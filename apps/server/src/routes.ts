@@ -23,6 +23,7 @@ import {
   updateAdmin,
   deleteAdmin,
   listAdminsWithStats,
+  isAdminExpired,
   ALL_PERMISSIONS,
   type Permission,
   type AuthedRequest,
@@ -41,7 +42,7 @@ import {
   getUser,
   summarize,
 } from "./users.js";
-import { getClientIps, restartXray, getServerTraffic, getInboundTraffic } from "./xray.js";
+import { getClientIps, restartCore, getServerTraffic, getInboundTraffic } from "./core.js";
 import { listActivity, logActivity, clearActivity } from "./activity.js";
 import { exportData, importData } from "./backup.js";
 import { loginRateLimit } from "./ratelimit.js";
@@ -129,6 +130,11 @@ api.post("/login", loginRateLimit, (req, res) => {
     res.status(401).json({ error: "invalid credentials" });
     return;
   }
+  if (isAdminExpired(admin)) {
+    logActivity(admin.username, "login_failed", "expired");
+    res.status(403).json({ error: "account expired" });
+    return;
+  }
   const token = signToken(admin);
   setAuthCookie(res, token);
   logActivity(admin.username, "login", "");
@@ -151,8 +157,8 @@ api.get("/system", requirePermission("dashboard"), (_req, res) => {
 });
 
 api.post("/system/restart-xray", requirePermission("dashboard"), (req: AuthedRequest, res) => {
-  restartXray();
-  logActivity(req.admin!.username, "xray_restart", "");
+  restartCore();
+  logActivity(req.admin!.username, "core_restart", "");
   res.json({ ok: true });
 });
 
@@ -169,7 +175,7 @@ api.patch("/inbounds/:id", requirePermission("inbounds"), async (req: AuthedRequ
   }
   setInboundEnabled(id, body.data.enabled);
   logActivity(req.admin!.username, "inbound_toggle", `#${id} -> ${body.data.enabled}`);
-  restartXray();
+  restartCore();
   res.json({ ok: true });
 });
 
@@ -233,7 +239,7 @@ api.post("/users", requirePermission("users"), async (req: AuthedRequest, res) =
   try {
     const user = createUser({ ...body.data, createdBy: req.admin!.id });
     logActivity(req.admin!.username, "user_create", user.email);
-    restartXray();
+    restartCore();
     res.json(user);
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
@@ -256,7 +262,7 @@ api.put("/users/:id", requirePermission("users"), async (req: AuthedRequest, res
     return;
   }
   logActivity(req.admin!.username, "user_update", user.email);
-  restartXray();
+  restartCore();
   res.json(user);
 });
 
@@ -268,7 +274,7 @@ api.delete("/users/:id", requirePermission("users"), async (req: AuthedRequest, 
   const user = getUser(Number(req.params.id));
   deleteUser(Number(req.params.id));
   logActivity(req.admin!.username, "user_delete", user?.email || String(req.params.id));
-  restartXray();
+  restartCore();
   res.json({ ok: true });
 });
 
@@ -284,7 +290,7 @@ api.post("/users/:id/toggle", requirePermission("users"), async (req: AuthedRequ
   }
   setUserEnabled(Number(req.params.id), body.data.enabled);
   logActivity(req.admin!.username, "user_toggle", `#${req.params.id} -> ${body.data.enabled}`);
-  restartXray();
+  restartCore();
   res.json({ ok: true });
 });
 
@@ -379,6 +385,8 @@ api.post("/admins", requireOwner, (req: AuthedRequest, res) => {
       password: z.string().min(6),
       permissions: z.array(permissionEnum),
       dataLimit: z.number().min(0).default(0),
+      expireDays: z.number().min(0).default(0),
+      comment: z.string().max(200).optional(),
     })
     .safeParse(req.body);
   if (!body.success) {
@@ -390,6 +398,8 @@ api.post("/admins", requireOwner, (req: AuthedRequest, res) => {
     body.data.password,
     body.data.permissions as Permission[],
     body.data.dataLimit,
+    body.data.expireDays,
+    body.data.comment ?? "",
   );
   if (!result.ok) {
     res.status(400).json({ error: result.error });
@@ -405,6 +415,8 @@ api.put("/admins/:id", requireOwner, (req: AuthedRequest, res) => {
       permissions: z.array(permissionEnum).optional(),
       dataLimit: z.number().min(0).optional(),
       password: z.string().min(6).optional(),
+      expireDays: z.number().min(0).optional(),
+      comment: z.string().max(200).optional(),
     })
     .safeParse(req.body);
   if (!body.success) {
@@ -415,6 +427,8 @@ api.put("/admins/:id", requireOwner, (req: AuthedRequest, res) => {
     permissions: body.data.permissions as Permission[] | undefined,
     dataLimit: body.data.dataLimit,
     password: body.data.password,
+    expireDays: body.data.expireDays,
+    comment: body.data.comment,
   });
   if (!result.ok) {
     res.status(400).json({ error: result.error });
@@ -449,7 +463,7 @@ api.post("/backup/import", requirePermission("dashboard"), async (req: AuthedReq
       "backup_import",
       `${result.users} users, ${result.inbounds} inbounds`,
     );
-    restartXray();
+    restartCore();
     res.json({ ok: true, ...result });
   } catch (e) {
     res.status(400).json({ error: (e as Error).message });
@@ -488,7 +502,7 @@ api.post("/routing", requirePermission("routing"), async (req: AuthedRequest, re
     body.data.label || "",
   );
   logActivity(req.admin!.username, "routing_add", body.data.label || body.data.domain);
-  restartXray();
+  restartCore();
   res.json(rule);
 });
 
@@ -500,14 +514,14 @@ api.put("/routing/:id", requirePermission("routing"), async (req: AuthedRequest,
   }
   updateRoutingRule(Number(req.params.id), body.data.inboundIds);
   logActivity(req.admin!.username, "routing_update", `#${req.params.id}`);
-  restartXray();
+  restartCore();
   res.json({ ok: true });
 });
 
 api.delete("/routing/:id", requirePermission("routing"), async (req: AuthedRequest, res) => {
   deleteRoutingRule(Number(req.params.id));
   logActivity(req.admin!.username, "routing_delete", `#${req.params.id}`);
-  restartXray();
+  restartCore();
   res.json({ ok: true });
 });
 

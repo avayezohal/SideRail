@@ -51,13 +51,13 @@ const nav: {
 
 function Brand() {
   return (
-    <div className="flex items-center gap-2">
-      <div className="grid h-9 w-9 place-items-center rounded-base border-2 border-border bg-main text-mtext neo-shadow">
+    <div className="flex min-w-0 items-center gap-2">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-base border-2 border-border bg-main text-mtext neo-shadow">
         <RailLogo className="h-5 w-5" />
       </div>
-      <div className="leading-tight">
-        <div className="font-heading text-lg tracking-tight">SideRail</div>
-        <div className="text-[10px] uppercase tracking-widest text-text/60">icubaby</div>
+      <div className="min-w-0 leading-tight">
+        <div className="truncate font-heading text-lg tracking-tight">SideRail</div>
+        <div className="truncate text-[10px] uppercase tracking-widest text-text/60">icubaby</div>
       </div>
     </div>
   );
@@ -136,11 +136,11 @@ export function AppLayout() {
     <div className="relative min-h-screen">
       <AnimatedBackground />
       <div className="relative flex min-h-screen">
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r-2 border-border bg-bw/60 p-4 backdrop-blur lg:flex">
-          <div className="px-2 py-2">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col overflow-y-auto border-r-2 border-border bg-bw/60 p-4 backdrop-blur lg:flex">
+          <div className="shrink-0 px-2 py-2">
             <Brand />
           </div>
-          <div className="mt-6 flex-1">
+          <div className="mt-6 min-h-[8rem] flex-1 overflow-y-auto">
             <NavItems can={can} isOwner={isOwner} t={t as never} />
           </div>
           <a
@@ -192,7 +192,7 @@ export function AppLayout() {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-2 border-border bg-bg/80 px-4 backdrop-blur lg:px-8">
-            <div className="flex items-center gap-3 lg:hidden">
+            <div className="flex min-w-0 items-center gap-3 lg:hidden">
               <Button
                 variant="neutral"
                 size="icon"
@@ -324,62 +324,67 @@ export function AppLayout() {
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-overlay" onClick={() => setMobileOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-72 border-r-2 border-border bg-bg p-4 animate-fade-in">
-            <div className="flex items-center justify-between">
+          <div className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r-2 border-border bg-bg p-4 animate-fade-in">
+            <div className="flex shrink-0 items-center justify-between gap-2">
               <Brand />
-              <Button variant="neutral" size="icon" onClick={() => setMobileOpen(false)}>
+              <Button
+                variant="neutral"
+                size="icon"
+                onClick={() => setMobileOpen(false)}
+                aria-label="Close menu"
+              >
                 <X className="h-5 w-5" />
               </Button>
             </div>
-            <div className="mt-6">
+            <div className="mt-6 min-h-0 flex-1 overflow-y-auto overscroll-contain">
               <NavItems can={can} isOwner={isOwner} t={t as never} onNavigate={() => setMobileOpen(false)} />
             </div>
-            <div className="absolute inset-x-4 bottom-4">
-              <a
-                href={GITHUB_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="mb-2 flex items-center justify-between gap-2 rounded-base border-2 border-border bg-bg/50 px-3 py-2.5 font-heading text-sm text-text/80 transition-all hover:bg-main hover:text-mtext"
-              >
-                <span className="flex items-center gap-2">
-                  <Github className="h-5 w-5" />GitHub</span>
-                <StarCount />
-              </a>
-              <a
-                href={TELEGRAM_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="mb-2 flex items-center justify-between gap-2 rounded-base border-2 border-border bg-bg/50 px-3 py-2.5 font-heading text-sm text-text/80 transition-all hover:bg-main hover:text-mtext"
-              >
-                <span className="flex items-center gap-2">
-                  <Send className="h-5 w-5" />Telegram</span>
-              </a>
-              <a
-                href={`${GITHUB_URL}/releases`}
-                target="_blank"
-                rel="noreferrer"
-                className="mb-3 flex items-center justify-between gap-2 rounded-base border-2 border-border bg-bg/50 px-3 py-2.5 font-heading text-sm text-text/80 transition-all hover:bg-main hover:text-mtext"
-              >
-                <span className="flex items-center gap-2">
-                  <Tag className="h-5 w-5" />{t("version")}</span>
-                <span className="text-xs text-text/60">v{PANEL_VERSION}</span>
-              </a>
-              <div className="mb-3 flex items-center gap-1 rounded-base border-2 border-border bg-bg/50 p-1">
-                <Languages className="ml-1 h-4 w-4 shrink-0 text-text/50" />
-                {LANGUAGES.map((l) => (
-                  <button
-                    key={l.code}
-                    onClick={() => changeLang(l.code)}
-                    className={cn(
-                      "flex-1 rounded-[4px] px-1 py-1.5 text-xs font-heading transition-colors",
-                      lang === l.code ? "bg-main text-mtext" : "hover:bg-main/15",
-                    )}
-                  >
-                    {l.label}
-                  </button>
-                ))}
-              </div>
-              <SidebarFooter username={username} role={admin?.role} onLogout={logout} />
+            <div className="mt-4 max-h-[55%] shrink-0 overflow-y-auto overscroll-contain">
+                <a
+                  href={GITHUB_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mb-2 flex items-center justify-between gap-2 rounded-base border-2 border-border bg-bg/50 px-3 py-2.5 font-heading text-sm text-text/80 transition-all hover:bg-main hover:text-mtext"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Github className="h-5 w-5 shrink-0" />GitHub</span>
+                  <StarCount />
+                </a>
+                <a
+                  href={TELEGRAM_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mb-2 flex items-center justify-between gap-2 rounded-base border-2 border-border bg-bg/50 px-3 py-2.5 font-heading text-sm text-text/80 transition-all hover:bg-main hover:text-mtext"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Send className="h-5 w-5 shrink-0" />Telegram</span>
+                </a>
+                <a
+                  href={`${GITHUB_URL}/releases`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mb-3 flex items-center justify-between gap-2 rounded-base border-2 border-border bg-bg/50 px-3 py-2.5 font-heading text-sm text-text/80 transition-all hover:bg-main hover:text-mtext"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Tag className="h-5 w-5 shrink-0" />{t("version")}</span>
+                  <span className="shrink-0 text-xs text-text/60">v{PANEL_VERSION}</span>
+                </a>
+                <div className="mb-3 flex items-center gap-1 rounded-base border-2 border-border bg-bg/50 p-1">
+                  <Languages className="ml-1 h-4 w-4 shrink-0 text-text/50" />
+                  {LANGUAGES.map((l) => (
+                    <button
+                      key={l.code}
+                      onClick={() => changeLang(l.code)}
+                      className={cn(
+                        "min-w-0 flex-1 truncate rounded-[4px] px-1 py-1.5 text-xs font-heading transition-colors",
+                        lang === l.code ? "bg-main text-mtext" : "hover:bg-main/15",
+                      )}
+                    >
+                      {l.label}
+                    </button>
+                  ))}
+                </div>
+                <SidebarFooter username={username} role={admin?.role} onLogout={logout} />
             </div>
           </div>
         </div>

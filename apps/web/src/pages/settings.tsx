@@ -8,6 +8,12 @@ import {
   Trash2,
   ShieldCheck,
   Pencil,
+  Settings2,
+  CalendarClock,
+  UserCog as UserCog2,
+  ArrowDownUp,
+  Database,
+  Tag,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
@@ -18,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { NumberInput } from "@/components/ui/number-input";
+import { PageHeader } from "@/components/page-header";
 import {
   Card,
   CardContent,
@@ -32,7 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn, formatBytes } from "@/lib/utils";
+import { cn, formatBytes, relativeTime } from "@/lib/utils";
 import type { AdminInfo, Permission } from "@/lib/types";
 
 const PERMISSION_KEYS: Record<Permission, "dashboard" | "users" | "inbounds" | "routing" | "activityLog" | "telegramBot" | "settings"> = {
@@ -88,7 +95,8 @@ function CredentialsCard() {
   };
 
   return (
-    <Card>
+    <Card className="card-lift flex h-full flex-col overflow-hidden">
+      <div className="h-1.5 w-full shrink-0 bg-[#a3e635]" />
       <CardHeader>
         <div className="flex items-center gap-2">
           <KeyRound className="h-5 w-5 text-main" />
@@ -96,8 +104,8 @@ function CredentialsCard() {
         </div>
         <CardDescription>{t("changeCredentialsDesc")}</CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={submit} className="space-y-4" noValidate>
+      <CardContent className="flex-1">
+        <form onSubmit={submit} className="flex h-full flex-col space-y-4" noValidate>
           <div className="space-y-2">
             <Label htmlFor="newUsername">{t("username")}</Label>
             <Input
@@ -127,7 +135,7 @@ function CredentialsCard() {
               autoComplete="current-password"
             />
           </div>
-          <Button type="submit" disabled={credMut.isPending} className="w-full sm:w-auto">
+          <Button type="submit" disabled={credMut.isPending} className="mt-auto w-full sm:w-auto">
             <Save className="h-4 w-4" />
             {credMut.isPending ? t("saving") : t("saveChanges")}
           </Button>
@@ -153,6 +161,8 @@ function AdminDialog({
   const [password, setPassword] = React.useState("");
   const [permissions, setPermissions] = React.useState<Permission[]>(["users"]);
   const [dataLimit, setDataLimit] = React.useState(0);
+  const [expireDays, setExpireDays] = React.useState(0);
+  const [comment, setComment] = React.useState("");
 
   React.useEffect(() => {
     if (!open) return;
@@ -161,16 +171,25 @@ function AdminDialog({
       setPassword("");
       setPermissions(editing.permissions);
       setDataLimit(Math.round((editing.dataLimit / 1024 ** 3) * 100) / 100);
+      setExpireDays(
+        editing.expireAt
+          ? Math.max(0, Math.ceil((editing.expireAt - Date.now()) / 86_400_000))
+          : 0,
+      );
+      setComment(editing.comment ?? "");
     } else {
       setUsername("");
       setPassword("");
       setPermissions(["users"]);
       setDataLimit(0);
+      setExpireDays(0);
+      setComment("");
     }
   }, [open, editing]);
 
   const createMut = useMutation({
-    mutationFn: () => api.createAdmin({ username, password, permissions, dataLimit }),
+    mutationFn: () =>
+      api.createAdmin({ username, password, permissions, dataLimit, expireDays, comment }),
     onSuccess: () => {
       toast.push("success", t("adminCreated"));
       qc.invalidateQueries({ queryKey: ["admins"] });
@@ -186,6 +205,8 @@ function AdminDialog({
       api.updateAdmin(editing!.id, {
         permissions,
         dataLimit,
+        expireDays,
+        comment,
         password: password || undefined,
       }),
     onSuccess: () => {
@@ -262,7 +283,7 @@ function AdminDialog({
                     type="button"
                     onClick={() => toggle(p)}
                     className={cn(
-                      "rounded-base border-2 border-border px-3 py-2 text-left text-sm font-heading transition-all",
+                      "item-lift rounded-base border-2 border-border px-3 py-2 text-left text-sm font-heading",
                       active ? "bg-main text-mtext neo-shadow" : "bg-bw hover:bg-main/10",
                     )}
                   >
@@ -275,10 +296,29 @@ function AdminDialog({
               {t("adminNoSettings")}
             </p>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t("dataQuota")}</Label>
+              <NumberInput value={dataLimit} onChange={setDataLimit} step={1} suffix="GB" />
+              <p className="text-[11px] text-text/50">{t("unlimitedHint")}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>{t("adminExpiry")}</Label>
+              <NumberInput value={expireDays} onChange={setExpireDays} step={1} suffix={t("days")} />
+              <p className="text-[11px] text-text/50">
+                {expireDays > 0 ? t("expiryHint") : t("neverExpires")}
+              </p>
+            </div>
+          </div>
           <div className="space-y-2">
-            <Label>{t("dataQuota")}</Label>
-            <NumberInput value={dataLimit} onChange={setDataLimit} step={1} suffix="GB" />
-            <p className="text-[11px] text-text/50">{t("unlimitedHint")}</p>
+            <Label htmlFor="adminComment">{t("comment")}</Label>
+            <Input
+              id="adminComment"
+              value={comment}
+              onChange={(e) => setComment(e.target.value.slice(0, 200))}
+              maxLength={200}
+              placeholder={t("adminCommentHint")}
+            />
           </div>
           <DialogFooter>
             <Button type="button" variant="neutral" onClick={() => onOpenChange(false)}>{t("cancel")}
@@ -315,7 +355,8 @@ function AdminsCard() {
   });
 
   return (
-    <Card className="min-w-0">
+    <Card className="card-lift flex h-full min-w-0 flex-col overflow-hidden">
+      <div className="h-1.5 w-full shrink-0 bg-[#fbbf24]" />
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
@@ -323,7 +364,6 @@ function AdminsCard() {
               <Users2 className="h-5 w-5 text-main" />
               <CardTitle>{t("admins")}</CardTitle>
             </div>
-            <CardDescription>{t("adminsDesc")}</CardDescription>
           </div>
           <Button
             className="w-full sm:w-auto"
@@ -336,86 +376,126 @@ function AdminsCard() {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="grid min-w-0 gap-3 sm:grid-cols-2">
+      <CardContent className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
         {admins.length === 0 && (
-          <div className="col-span-full rounded-base border-2 border-dashed border-border/40 py-10 text-center text-sm text-text/50">
-            No admins yet. Click “Add admin” to create one.
+          <div className="col-span-full flex flex-col items-center gap-2 rounded-base border-2 border-dashed border-border/40 py-10 text-center text-sm text-text/50">
+            <Users2 className="h-8 w-8" />
+            <p>{t("noAdmins")}</p>
           </div>
         )}
-        {admins.map((a) => (
-          <div
-            key={a.id}
-            className="flex min-w-0 flex-col gap-3 rounded-base border-2 border-border bg-bg/40 p-4"
-          >
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="grid h-11 w-11 shrink-0 place-items-center rounded-base border-2 border-border bg-main font-heading uppercase text-mtext">
-                  {a.username.slice(0, 1)}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="max-w-[140px] truncate font-heading" title={a.username}>
+        {admins.map((a) => {
+          const expired = !!a.expireAt && a.expireAt < Date.now();
+          return (
+            <div
+              key={a.id}
+              className="item-lift flex min-w-0 flex-col overflow-hidden rounded-base border-2 border-border bg-bg/40"
+            >
+              {expired && <div className="h-1 w-full shrink-0 bg-red-400" />}
+              <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div
+                      className={cn(
+                        "grid h-12 w-12 shrink-0 place-items-center rounded-base border-2 border-border",
+                        expired ? "bg-bw text-text/60" : "bg-main text-mtext",
+                      )}
+                    >
+                      <UserCog2 className="h-6 w-6" />
+                    </div>
+                    <span className="min-w-0 flex-1 truncate font-heading text-base" title={a.username}>
                       {a.username}
                     </span>
-                    <Badge variant="info" className="gap-1 text-[10px]">
-                      <ShieldCheck className="h-3 w-3" /> {t("admin")}
-                    </Badge>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      variant="neutral"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => {
+                        setEditing(a);
+                        setDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="icon"
+                      className="h-10 w-10"
+                      onClick={() => setDeleteTarget(a)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {(a.comment || expired) && (
+                  <div className="min-w-0 space-y-2">
+                    {a.comment && (
+                      <div className="item-lift flex items-center gap-2 rounded-base border-2 border-border bg-bg/40 px-2.5 py-2">
+                        <Tag className="h-3.5 w-3.5 shrink-0 text-text/50" />
+                        <span className="min-w-0 flex-1 truncate font-heading text-sm" title={a.comment}>
+                          {a.comment}
+                        </span>
+                      </div>
+                    )}
+                    {expired && (
+                      <Badge variant="danger" className="gap-1 text-[10px]">
+                        <ShieldCheck className="h-3 w-3" /> {t("expired")}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-auto space-y-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="item-lift min-w-0 rounded-base border-2 border-border bg-lime-300/15 p-2">
+                      <div className="flex items-center gap-1 text-lime-600 dark:text-lime-400">
+                        <Users2 className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate font-heading text-base">{a.userCount ?? 0}</span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-widest text-text/50">{t("users")}</div>
+                    </div>
+                    <div className="item-lift min-w-0 rounded-base border-2 border-border bg-sky-300/15 p-2">
+                      <div className="flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                        <ArrowDownUp className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate font-heading text-sm">{formatBytes(a.used ?? 0)}</span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-widest text-text/50">{t("used")}</div>
+                    </div>
+                    <div className="item-lift min-w-0 rounded-base border-2 border-border bg-amber-300/15 p-2">
+                      <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                        <Database className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate font-heading text-sm">
+                          {a.dataLimit > 0 ? formatBytes(a.dataLimit) : "∞"}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-[10px] uppercase tracking-widest text-text/50">{t("quota")}</div>
+                    </div>
+                  </div>
+                  <div
+                    className={cn(
+                      "item-lift flex items-center justify-center gap-2 rounded-base border-2 border-border py-2.5 text-center",
+                      expired ? "bg-red-400/15" : "bg-lime-300/15",
+                    )}
+                  >
+                    <CalendarClock
+                      className={cn("h-4 w-4 shrink-0", expired ? "text-red-500" : "text-lime-500")}
+                    />
+                    <div className="min-w-0">
+                      <div className="truncate font-heading text-sm">
+                        {!a.expireAt ? t("neverExpires") : expired ? t("expired") : relativeTime(a.expireAt)}
+                      </div>
+                      <div className="text-[10px] uppercase tracking-widest text-text/50">
+                        {t("adminExpiry")}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-1">
-                <Button
-                  variant="neutral"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => {
-                    setEditing(a);
-                    setDialogOpen(true);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="danger"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => setDeleteTarget(a)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
             </div>
-
-            <div className="flex flex-wrap gap-1">
-              {a.permissions.length === 0 ? (
-                <span className="text-xs text-text/40">{t("adminNoSettings")}</span>
-              ) : (
-                a.permissions.map((p) => (
-                  <Badge key={p} variant="neutral" className="text-[10px]">
-                    {t(PERMISSION_KEYS[p])}
-                  </Badge>
-                ))
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 border-t-2 border-border/30 pt-3 text-center">
-              <div className="min-w-0">
-                <div className="truncate font-heading text-sm">{a.userCount ?? 0}</div>
-                <div className="text-[10px] uppercase tracking-widest text-text/50">{t("adminUsers")}</div>
-              </div>
-              <div className="min-w-0">
-                <div className="truncate font-heading text-sm">{formatBytes(a.used ?? 0)}</div>
-                <div className="text-[10px] uppercase tracking-widest text-text/50">{t("used")}</div>
-              </div>
-              <div className="min-w-0">
-                <div className="truncate font-heading text-sm">
-                  {a.dataLimit > 0 ? formatBytes(a.dataLimit) : "∞"}
-                </div>
-                <div className="text-[10px] uppercase tracking-widest text-text/50">{t("quota")}</div>
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </CardContent>
 
       <AdminDialog open={dialogOpen} onOpenChange={setDialogOpen} editing={editing} />
@@ -449,17 +529,21 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-3xl">{t("settings")}</h1>
-        <p className="text-sm font-base text-text/60">{t("manageAccount")}</p>
-      </div>
+      <PageHeader
+        icon={Settings2}
+        accent="#fbbf24"
+        title={t("settings")}
+        description={t("manageAccount")}
+      />
 
       {isOwner ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr] lg:items-start">
-          <div className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-5 lg:items-stretch">
+          <div className="lg:col-span-2">
             <CredentialsCard />
           </div>
-          <AdminsCard />
+          <div className="lg:col-span-3">
+            <AdminsCard />
+          </div>
         </div>
       ) : (
         <CredentialsCard />

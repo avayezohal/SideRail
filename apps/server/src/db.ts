@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import { nanoid } from "nanoid";
 import { config } from "./config.js";
 
 export const db = new DatabaseSync(config.dbPath);
@@ -19,6 +20,8 @@ export function migrate(): void {
       role TEXT NOT NULL DEFAULT 'admin',
       permissions TEXT NOT NULL DEFAULT '[]',
       data_limit INTEGER NOT NULL DEFAULT 0,
+      expire_at INTEGER,
+      comment TEXT NOT NULL DEFAULT '',
       token_version INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL
     );
@@ -77,7 +80,9 @@ export function migrate(): void {
     CREATE TABLE IF NOT EXISTS usage_history (
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       ts INTEGER NOT NULL,
-      total INTEGER NOT NULL
+      total INTEGER NOT NULL,
+      up INTEGER NOT NULL DEFAULT 0,
+      down INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS client_ips (
@@ -127,11 +132,20 @@ function migrateColumns(): void {
     db.exec("ALTER TABLE admins ADD COLUMN data_limit INTEGER NOT NULL DEFAULT 0");
   if (!names.includes("token_version"))
     db.exec("ALTER TABLE admins ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0");
+  if (!names.includes("expire_at")) db.exec("ALTER TABLE admins ADD COLUMN expire_at INTEGER");
+  if (!names.includes("comment")) db.exec("ALTER TABLE admins ADD COLUMN comment TEXT NOT NULL DEFAULT ''");
 
   const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
   if (!userCols.map((c) => c.name).includes("created_by")) {
     db.exec("ALTER TABLE users ADD COLUMN created_by INTEGER");
   }
+
+  const usageCols = db.prepare("PRAGMA table_info(usage_history)").all() as { name: string }[];
+  const uhNames = usageCols.map((c) => c.name);
+  if (!uhNames.includes("up"))
+    db.exec("ALTER TABLE usage_history ADD COLUMN up INTEGER NOT NULL DEFAULT 0");
+  if (!uhNames.includes("down"))
+    db.exec("ALTER TABLE usage_history ADD COLUMN down INTEGER NOT NULL DEFAULT 0");
 
   const routingCols = db.prepare("PRAGMA table_info(routing_rules)").all() as { name: string }[];
   const rNames = routingCols.map((c) => c.name);
@@ -140,10 +154,37 @@ function migrateColumns(): void {
   if (!rNames.includes("label"))
     db.exec("ALTER TABLE routing_rules ADD COLUMN label TEXT NOT NULL DEFAULT ''");
 
+  // One-time rename of the seeded demo client: sample-user -> Default
+  const hasDefaultClient = (
+    db.prepare("SELECT COUNT(*) AS c FROM users WHERE email = 'Default'").get() as { c: number }
+  ).c;
+  if (hasDefaultClient === 0) {
+    db.prepare("UPDATE users SET email = 'Default' WHERE email = 'sample-user'").run();
+  }
+
+  // Rewrite legacy default inbound paths (/SideRail/...) to fresh random /api/... paths.
+  // Hand-written custom paths are left untouched.
+  const allPaths = db.prepare("SELECT id, path FROM inbounds").all() as {
+    id: number;
+    path: string;
+  }[];
+  const taken = new Set(allPaths.filter((r) => !r.path.startsWith("/SideRail/")).map((r) => r.path));
+  const legacy = allPaths.filter((r) => r.path.startsWith("/SideRail/"));
+  if (legacy.length > 0) {
+    const upd = db.prepare("UPDATE inbounds SET path = ? WHERE id = ?");
+    for (const row of legacy) {
+      let p = "";
+      do {
+        p = `/api/${nanoid(6)}`;
+      } while (taken.has(p));
+      taken.add(p);
+      upd.run(p, row.id);
+    }
+  }
+
   const ownerCount = (
     db.prepare("SELECT COUNT(*) AS c FROM admins WHERE role = 'owner'").get() as { c: number }
-  ).c;
-  const adminCount = (db.prepare("SELECT COUNT(*) AS c FROM admins").get() as { c: number }).c;
+  ).c;  const adminCount = (db.prepare("SELECT COUNT(*) AS c FROM admins").get() as { c: number }).c;
   if (ownerCount === 0 && adminCount > 0) {
     const first = db.prepare("SELECT id FROM admins ORDER BY id ASC LIMIT 1").get() as
       | { id: number }

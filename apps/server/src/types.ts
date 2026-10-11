@@ -44,6 +44,7 @@ export interface UserWithInbounds extends UserRecord {
   total: number;
   online: boolean;
   creator?: string;
+  creatorRole?: string;
 }
 
 export interface ActivityEntry {

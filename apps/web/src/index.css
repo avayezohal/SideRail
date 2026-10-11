@@ -42,6 +42,10 @@ body,
   height: 100%;
 }
 
+html {
+  scrollbar-gutter: stable both-edges;
+}
+
 body {
   background-color: var(--bg);
   color: var(--text);
@@ -161,6 +165,59 @@ body {
 
 .animate-slide-up {
   animation: slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-rise {
+  animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Neobrutalist hover lift for interactive cards. */
+.card-lift {
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    opacity 0.2s ease;
+}
+
+@media (hover: hover) {
+  .card-lift:hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 3px 3px 0 0 var(--border);
+  }
+}
+
+/* Subtle interactive lift for inner tiles/items inside cards. */
+.item-lift {
+  transition:
+    transform 0.16s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.16s ease,
+    background-color 0.16s ease;
+}
+
+@media (hover: hover) {
+  .item-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 2px 2px 0 0 var(--border);
+  }
+}
+
+/* Thin inline bar used for per-inbound traffic breakdowns. */
+.split-bar {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 ::-webkit-scrollbar {

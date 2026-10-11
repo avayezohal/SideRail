@@ -61,11 +61,11 @@ export function seedDefaultClient(): void {
     | { id: number }
     | undefined;
   createUser({
-    email: "sample-user",
+    email: "Default",
     dataLimit: 0,
     ipLimit: 0,
     expireDays: 0,
-    comment: "",
+    comment: "system",
     inboundIds: enabledInbounds,
     createdBy: owner?.id ?? null,
   });
@@ -166,21 +166,23 @@ function inboundIdsFor(userId: number): number[] {
   ).map((r) => r.inbound_id);
 }
 
-function creatorName(id: number | null): string | undefined {
-  if (id == null) return undefined;
-  const row = db.prepare("SELECT username FROM admins WHERE id = ?").get(id) as
-    | { username: string }
+function creatorInfo(id: number | null): { name?: string; role?: string } {
+  if (id == null) return {};
+  const row = db.prepare("SELECT username, role FROM admins WHERE id = ?").get(id) as
+    | { username: string; role: string }
     | undefined;
-  return row?.username;
+  return { name: row?.username, role: row?.role };
 }
 
 function decorate(row: UserRecord): UserWithInbounds {
+  const creator = creatorInfo(row.created_by);
   return {
     ...row,
     inbound_ids: inboundIdsFor(row.id),
     total: row.up + row.down,
     online: row.online_at != null && Date.now() - row.online_at < ONLINE_WINDOW_MS,
-    creator: creatorName(row.created_by),
+    creator: creator.name,
+    creatorRole: creator.role,
   };
 }
 

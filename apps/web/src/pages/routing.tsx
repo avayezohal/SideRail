@@ -1,11 +1,12 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Plus, Trash2, Globe } from "lucide-react";
+import { Ban, Plus, Trash2, Globe, Route, Check, Server } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MultiCombobox, type ComboItem } from "@/components/ui/combobox";
+import { PageHeader } from "@/components/page-header";
 import {
   Card,
   CardContent,
@@ -97,13 +98,22 @@ export default function RoutingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-3xl">{t("routing")}</h1>
-        <p className="text-sm font-base text-text/60">{t("routingDesc")}</p>
-      </div>
+      <PageHeader
+        icon={Route}
+        accent="#fbbf24"
+        title={t("routing")}
+        description={t("routingDesc")}
+        actions={
+          <Badge variant="danger" className="h-9 gap-1.5 px-3">
+            <Ban className="h-4 w-4 shrink-0" />
+            {rules.length} {t("activeRules")}
+          </Badge>
+        }
+      />
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
-        <Card>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-stretch">
+        <Card className="card-lift flex flex-col overflow-hidden">
+          <div className="h-1.5 w-full shrink-0 bg-[#7dd3fc]" />
           <CardHeader>
             <div className="flex items-center gap-2">
               <Ban className="h-5 w-5 text-main" />
@@ -111,7 +121,7 @@ export default function RoutingPage() {
             </div>
             <CardDescription>{t("blockDomainsHint")}</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1">
             <form onSubmit={submit} className="space-y-4" noValidate>
               <MultiCombobox
                 items={domainItems}
@@ -132,20 +142,23 @@ export default function RoutingPage() {
                     {selected.length === inbounds.length ? t("clearAll") : t("selectAll")}
                   </button>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {inbounds.map((ib) => {
+                <div className="grid grid-cols-2 gap-2">
+                  {inbounds.map((ib, idx) => {
                     const active = selected.includes(ib.id);
+                    const odd = inbounds.length % 2 === 1;
                     return (
                       <button
                         key={ib.id}
                         type="button"
                         onClick={() => toggle(ib.id)}
                         className={cn(
-                          "min-w-[calc(50%-0.25rem)] flex-1 rounded-base border-2 border-border px-3 py-2 text-center text-xs font-heading transition-all sm:min-w-[calc(33.333%-0.5rem)]",
+                          "item-lift flex min-w-0 items-center justify-center gap-1.5 rounded-base border-2 border-border px-2 py-2.5 text-center text-xs font-heading",
                           active ? "bg-main text-mtext neo-shadow" : "bg-bw hover:bg-main/10",
+                          odd && idx === inbounds.length - 1 && "col-span-2",
                         )}
                       >
-                        {ib.tag}
+                        {active && <Check className="h-3.5 w-3.5 shrink-0" />}
+                        <span className="truncate">{ib.tag}</span>
                       </button>
                     );
                   })}
@@ -159,7 +172,8 @@ export default function RoutingPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-lift flex flex-col overflow-hidden">
+          <div className="h-1.5 w-full shrink-0 bg-[#fbbf24]" />
           <CardHeader>
             <div className="flex items-center gap-2">
               <Ban className="h-5 w-5 text-main" />
@@ -167,45 +181,57 @@ export default function RoutingPage() {
             </div>
             <CardDescription>{rules.length} {t("activeRules")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="flex-1 space-y-2 lg:max-h-[520px] lg:overflow-y-auto">
             {rules.length === 0 && (
-              <div className="rounded-base border-2 border-dashed border-border/40 py-10 text-center text-sm text-text/50">
-                {t("noBlockRules")}
+              <div className="flex flex-col items-center gap-2 rounded-base border-2 border-dashed border-border/40 py-10 text-center text-sm text-text/50">
+                <Ban className="h-8 w-8" />
+                <p>{t("noBlockRules")}</p>
               </div>
             )}
-            {rules.map((r) => (
+            {rules.map((r, i) => (
               <div
                 key={r.id}
-                className="rounded-base border-2 border-border bg-bg/40 p-3"
+                className="item-lift animate-rise overflow-hidden rounded-base border-2 border-border bg-bw"
+                style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
               >
-                <div className="flex items-center gap-3">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-base border-2 border-border bg-red-300">
-                    <Globe className="h-4 w-4 text-black" />
+                <div className="p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 shrink-0 place-items-center rounded-base border-2 border-border bg-[#fbbf24]">
+                      <Globe className="h-4 w-4 text-black" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-heading text-sm">{r.label || r.domain}</div>
+                      {r.label && r.domain && r.label !== r.domain && (
+                        <div className="truncate font-mono text-[11px] text-text/50">{r.domain}</div>
+                      )}
+                    </div>
+                    <Button
+                      variant="danger"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => deleteMut.mutate(r.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-heading">{r.label || r.domain}</div>
+                  <div className="mt-3 grid grid-cols-2 gap-1.5">
+                    {(() => {
+                      const list = r.inbound_ids.length === 0 ? inbounds.map((i) => i.id) : r.inbound_ids;
+                      const odd = list.length % 2 === 1;
+                      return list.map((id, idx) => (
+                        <span
+                          key={id}
+                          className={cn(
+                            "flex min-w-0 items-center justify-center gap-1.5 rounded-base border-2 border-border bg-bg/40 px-2 py-1.5",
+                            odd && idx === list.length - 1 && "col-span-2 bg-sky-300/15",
+                          )}
+                        >
+                          <Server className="h-3 w-3 shrink-0 text-sky-400" />
+                          <span className="truncate font-heading text-[11px]">{inboundName(id)}</span>
+                        </span>
+                      ));
+                    })()}
                   </div>
-                  <Button
-                    variant="danger"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => deleteMut.mutate(r.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {(r.inbound_ids.length === 0 ? inbounds.map((i) => i.id) : r.inbound_ids).map(
-                    (id) => (
-                      <Badge
-                        key={id}
-                        variant="neutral"
-                        className="max-w-full truncate text-[10px]"
-                      >
-                        {inboundName(id)}
-                      </Badge>
-                    ),
-                  )}
                 </div>
               </div>
             ))}

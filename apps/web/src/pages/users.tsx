@@ -14,6 +14,7 @@ import {
   MoreVertical,
   Copy,
   Server,
+  Tag,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
@@ -21,14 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -43,11 +36,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Progress } from "@/components/ui/progress";
+import { PageHeader } from "@/components/page-header";
 import { UserFormDialog } from "@/components/users/user-form-dialog";
-import { Infinity as InfinityIcon, UserCog as UserCog2 } from "lucide-react";
+import { Infinity as InfinityIcon, Crown, UserRound } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useI18n } from "@/lib/i18n";
-import { formatBytes, relativeTime, durationSince, cn } from "@/lib/utils";
+import { formatBytes, relativeTime, cn } from "@/lib/utils";
 import type { Inbound, User, UserFormValues, UserSummary } from "@/lib/types";
 
 function SummaryCard({
@@ -62,7 +56,8 @@ function SummaryCard({
   accent: string;
 }) {
   return (
-    <Card>
+    <Card className="card-lift animate-rise overflow-hidden">
+      <div className="h-1.5 w-full" style={{ background: accent }} />
       <CardContent className="flex items-center gap-3 p-4 sm:gap-4 sm:p-5">
         <div
           className="grid h-11 w-11 shrink-0 place-items-center rounded-base border-2 border-border sm:h-12 sm:w-12"
@@ -101,20 +96,6 @@ function TrafficBar({ user }: { user: User }) {
         <span className="text-sky-400">↑ {formatBytes(user.up)}</span>
       </div>
     </div>
-  );
-}
-
-function OnlineDot({ online }: { online: boolean }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className={cn(
-          "inline-block h-2.5 w-2.5 rounded-full border-2 border-border",
-          online ? "animate-pulse bg-lime-400" : "bg-zinc-500",
-        )}
-      />
-      <span className="text-xs font-base text-text/60">{online ? onlineLabel : offlineLabel}</span>
-    </span>
   );
 }
 
@@ -218,83 +199,202 @@ export default function UsersPage() {
 
   const inboundName = (id: number) => inbounds.find((i) => i.id === id)?.tag || `#${id}`;
 
-  const rowActions = (u: User) => (
-    <div className="flex items-center gap-1">
-      <Button
-        variant="neutral"
-        size="icon"
-        className="h-8 w-8"
-        onClick={() => openEdit(u)}
-        title={t("edit")}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="neutral"
-        size="icon"
-        className="h-8 w-8"
-        onClick={() => copySubLink(u)}
-        title={t("copySubLink")}
-      >
-        <Link2 className="h-3.5 w-3.5" />
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="neutral" size="icon" className="h-8 w-8" title={t("more")}>
-            <MoreVertical className="h-3.5 w-3.5" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => copySubLink(u)}>
-            <Copy className="h-4 w-4" />{t("copySubLink")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => window.open(`/sub/${u.sub_token}`, "_blank")}>
-            <Server className="h-4 w-4" />{t("openSubPage")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => resetMut.mutate(u.id)}>
-            <RotateCcw className="h-4 w-4" />{t("resetTraffic")}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => rotateMut.mutate(u.id)}>
-            <RefreshCw className="h-4 w-4" />{t("rotateSubToken")}
-          </DropdownMenuItem>
-          <DropdownMenuItem danger onClick={() => setDeleteTarget(u)}>
-            <Trash2 className="h-4 w-4" />{t("delete")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
-  );
+  const avatarColors = ["#a3e635", "#7dd3fc", "#fbbf24", "#38bdf8", "#86efac", "#22d3ee", "#facc15"];
+  const avatarColor = (name: string) => {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return avatarColors[h % avatarColors.length];
+  };
 
-  const inboundBadges = (u: User, opts?: { center?: boolean; all?: boolean }) => {
-    const ids = opts?.all ? u.inbound_ids : u.inbound_ids.slice(0, 3);
+  const inboundTags = (u: User) => {
+    const ids = u.inbound_ids;
+    const odd = ids.length % 2 === 1;
     return (
-      <div className={cn("flex flex-wrap gap-1", opts?.center && "justify-center")}>
-        {u.inbound_ids.length === 0 && <span className="text-xs text-text/40">none</span>}
-        {ids.map((id) => (
-          <Badge key={id} variant="neutral" className="text-[10px]">
-            {inboundName(id)}
-          </Badge>
-        ))}
-        {!opts?.all && u.inbound_ids.length > 3 && (
-          <Badge variant="info" className="text-[10px]">
-            +{u.inbound_ids.length - 3}
-          </Badge>
+      <div className="grid grid-cols-2 gap-1.5">
+        {ids.length === 0 && (
+          <span className="col-span-2 rounded-base border-2 border-dashed border-border/40 py-2 text-center text-[10px] uppercase tracking-widest text-text/40">
+            {t("none")}
+          </span>
         )}
+        {ids.map((id, idx) => (
+          <span
+            key={id}
+            className={cn(
+              "flex min-w-0 items-center gap-1.5 rounded-base border-2 border-border bg-bg/40 px-2.5 py-2",
+              odd && idx === ids.length - 1 && "col-span-2 justify-center bg-sky-300/15",
+            )}
+            title={inboundName(id)}
+          >
+            <Server className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+            <span className="truncate font-heading text-xs">{inboundName(id)}</span>
+          </span>
+        ))}
       </div>
+    );
+  };
+
+  const UserCard = ({ u }: { u: User }) => {
+    const ac = avatarColor(u.email);
+    return (
+      <Card className="card-lift animate-rise flex flex-col overflow-hidden">
+        <div className="h-1.5 w-full shrink-0" style={{ background: u.online ? ac : undefined }}>
+          {!u.online && <div className="h-full w-full bg-border/40" />}
+        </div>
+        <CardContent className="flex flex-1 flex-col gap-2.5 p-3.5">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div
+                className="grid h-12 w-12 shrink-0 place-items-center rounded-base border-2 border-border text-black"
+                style={{ background: ac }}
+              >
+                <UserRound className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-heading text-base" title={u.email}>
+                  {u.email}
+                </div>
+                <span
+                  className={cn(
+                    "mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-heading uppercase tracking-wide",
+                    u.online ? "bg-lime-300/20 text-lime-600 dark:text-lime-300" : "bg-bw text-text/50",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-2 w-2 rounded-full",
+                      u.online ? "animate-pulse bg-lime-400" : "bg-zinc-500",
+                    )}
+                  />
+                  {u.online ? onlineLabel : offlineLabel}
+                </span>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-start">
+              <Switch
+                checked={!!u.enabled}
+                onCheckedChange={(v) => toggleMut.mutate({ id: u.id, enabled: v })}
+              />
+            </div>
+          </div>
+
+          {(u.comment || (isOwner && u.creator)) && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {isOwner && u.creator && (
+                <Badge
+                  variant="neutral"
+                  className={cn(
+                    "gap-1 text-[11px]",
+                    u.creatorRole === "owner"
+                      ? "bg-yellow-300/20 text-yellow-700 dark:text-yellow-300"
+                      : "bg-sky-300/20 text-sky-700 dark:text-sky-300",
+                  )}
+                >
+                  {u.creatorRole === "owner" ? (
+                    <Crown className="h-3 w-3 shrink-0" />
+                  ) : (
+                    <ShieldCheck className="h-3 w-3 shrink-0" />
+                  )}
+                  <span className="max-w-[120px] truncate">{u.creator}</span>
+                </Badge>
+              )}
+              {u.comment && (
+                <Badge
+                  variant="neutral"
+                  className={cn(
+                    "gap-1 text-[11px]",
+                    u.comment === "system" &&
+                      "bg-lime-300/20 text-lime-700 dark:text-lime-300",
+                  )}
+                >
+                  <Tag className="h-3 w-3 shrink-0" />
+                  <span className="max-w-[140px] truncate">{u.comment}</span>
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {inboundTags(u)}
+
+          <div className="rounded-base border-2 border-border bg-bg/40 p-2.5">
+            <TrafficBar user={u} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-center">
+            <div className="rounded-base border-2 border-border bg-lime-300/15 py-1.5">
+              <div className="flex items-center justify-center gap-1 font-heading text-sm">
+                {u.data_limit <= 0 ? (
+                  <InfinityIcon className="h-4 w-4" />
+                ) : (
+                  formatBytes(Math.max(0, u.data_limit - u.total))
+                )}
+              </div>
+              <div className="truncate px-1 text-[10px] uppercase tracking-widest text-text/50">
+                {t("remaining")}
+              </div>
+            </div>
+            <div className="rounded-base border-2 border-border bg-sky-300/15 py-1.5">
+              <div className="flex items-center justify-center gap-1 font-heading text-sm">
+                {u.expire_at ? relativeTime(u.expire_at) : <InfinityIcon className="h-4 w-4" />}
+              </div>
+              <div className="truncate px-1 text-[10px] uppercase tracking-widest text-text/50">
+                {t("expires")}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-auto grid grid-cols-3 gap-2 pt-0.5">
+            <Button variant="neutral" onClick={() => openEdit(u)} className="w-full">
+              <Pencil className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t("edit")}</span>
+            </Button>
+            <Button variant="neutral" onClick={() => copySubLink(u)} className="w-full">
+              <Link2 className="h-4 w-4 shrink-0" />
+              <span className="truncate">{t("copy")}</span>
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="neutral" className="w-full">
+                  <MoreVertical className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{t("more")}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => copySubLink(u)}>
+                  <Copy className="h-4 w-4" />{t("copySubLink")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.open(`/sub/${u.sub_token}`, "_blank")}>
+                  <Server className="h-4 w-4" />{t("openSubPage")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => resetMut.mutate(u.id)}>
+                  <RotateCcw className="h-4 w-4" />{t("resetTraffic")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => rotateMut.mutate(u.id)}>
+                  <RefreshCw className="h-4 w-4" />{t("rotateSubToken")}
+              </DropdownMenuItem>
+              <DropdownMenuItem danger onClick={() => setDeleteTarget(u)}>
+                <Trash2 className="h-4 w-4" />{t("delete")}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </CardContent>
+    </Card>
     );
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-heading text-3xl">{t("users")}</h1>
-          <p className="text-sm font-base text-text/60">{t("manageClients")}</p>
-        </div>
-        <Button onClick={openNew} className="w-full sm:w-auto">
-          <UserPlus className="h-4 w-4" />{t("newUser")}
-        </Button>
-      </div>
+      <PageHeader
+        icon={Users2}
+        accent="#7dd3fc"
+        title={t("users")}
+        description={t("manageClients")}
+        actions={
+          <Button onClick={openNew} className="w-full sm:w-auto">
+            <UserPlus className="h-4 w-4" />{t("newUser")}
+          </Button>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         <SummaryCard icon={Users2} label={t("clients")} value={summary.clients} accent="#a3e635" />
@@ -304,209 +404,24 @@ export default function UsersPage() {
           icon={BatteryWarning}
           label={t("depleting")}
           value={summary.depleting}
-          accent="#fda4af"
+          accent="#fbbf24"
         />
       </div>
 
       {users.length === 0 && (
         <Card>
-          <CardContent className="py-16 text-center text-text/50">
-            No users yet. Click “New User” to create one.
-          </CardContent>
+          <CardContent className="py-16 text-center text-text/50">{t("noUsers")}</CardContent>
         </Card>
       )}
 
-      <div className="hidden lg:block">
-        {users.length > 0 && (
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-center">{t("actions")}</TableHead>
-                    <TableHead className="text-center">{t("enabled")}</TableHead>
-                    <TableHead className="text-center">{t("status")}</TableHead>
-                    <TableHead className="text-center">{t("client")}</TableHead>
-                    <TableHead className="text-center">{t("inbounds")}</TableHead>
-                    <TableHead className="min-w-[180px] text-center">{t("traffic")}</TableHead>
-                    <TableHead className="text-center">{t("remaining")}</TableHead>
-                    <TableHead className="text-center">{t("duration")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((u) => (
-                    <TableRow key={u.id}>
-                      <TableCell>
-                        <div className="flex justify-center">{rowActions(u)}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-center">
-                          <Switch
-                            checked={!!u.enabled}
-                            onCheckedChange={(v) => toggleMut.mutate({ id: u.id, enabled: v })}
-                          />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-center">
-                          <OnlineDot online={u.online} />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="mx-auto max-w-[160px] text-center">
-                          <div className="truncate font-heading" title={u.email}>
-                            {u.email}
-                          </div>
-                          {u.comment && (
-                            <div className="truncate text-xs text-text/50">{u.comment}</div>
-                          )}
-                          {isOwner && u.creator && (
-                            <Badge variant="neutral" className="mt-1 gap-1 text-[10px]">
-                              <UserCog2 className="h-3 w-3" />
-                              {u.creator}
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex justify-center">{inboundBadges(u)}</div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="mx-auto max-w-[200px]">
-                          <TrafficBar user={u} />
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center text-sm font-base">
-                        <div className="flex flex-col items-center">
-                          {u.data_limit <= 0 ? (
-                            <InfinityIcon className="h-4 w-4 text-text/60" />
-                          ) : (
-                            formatBytes(Math.max(0, u.data_limit - u.total))
-                          )}
-                          {u.expire_at && (
-                            <div className="text-xs text-text/50">{relativeTime(u.expire_at)}</div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center text-sm font-base">
-                        <div className="flex justify-center">
-                          {u.expire_at ? (
-                            durationSince(u.created_at)
-                          ) : (
-                            <InfinityIcon className="h-4 w-4 text-text/60" />
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      <div className="grid min-w-0 gap-3 lg:hidden">
-        {users.map((u) => (
-          <Card key={u.id} className="overflow-hidden">
-            <CardContent className="space-y-3 p-4">
-              <div className="flex min-w-0 items-center gap-3">
-                <div
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-base border-2 border-border bg-main font-heading text-lg uppercase text-mtext"
-                >
-                  {u.email.slice(0, 1)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-heading text-base" title={u.email}>
-                    {u.email}
-                  </div>
-                  <div className="mt-0.5">
-                    <OnlineDot online={u.online} />
-                  </div>
-                </div>
-                <Switch
-                  checked={!!u.enabled}
-                  onCheckedChange={(v) => toggleMut.mutate({ id: u.id, enabled: v })}
-                />
-              </div>
-
-              {u.comment && (
-                <div className="truncate text-center text-xs text-text/50" title={u.comment}>
-                  {u.comment}
-                </div>
-              )}
-              {isOwner && u.creator && (
-                <div className="flex justify-center">
-                  <Badge variant="neutral" className="max-w-full gap-1 text-[10px]">
-                    <UserCog2 className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{t("by")} {u.creator}</span>
-                  </Badge>
-                </div>
-              )}
-
-              <div className="min-w-0">{inboundBadges(u, { center: true, all: true })}</div>
-              <TrafficBar user={u} />
-
-              <div className="grid grid-cols-2 gap-2 border-t-2 border-border/30 pt-3 text-center">
-                <div className="rounded-base border-2 border-border bg-bg/40 py-2">
-                  <div className="flex items-center justify-center gap-1 font-heading text-sm">
-                    {u.data_limit <= 0 ? (
-                      <InfinityIcon className="h-4 w-4" />
-                    ) : (
-                      formatBytes(Math.max(0, u.data_limit - u.total))
-                    )}
-                  </div>
-                  <div className="truncate px-1 text-[10px] uppercase tracking-widest text-text/50">
-                    {t("remaining")}
-                  </div>
-                </div>
-                <div className="rounded-base border-2 border-border bg-bg/40 py-2">
-                  <div className="flex items-center justify-center gap-1 font-heading text-sm">
-                    {u.expire_at ? relativeTime(u.expire_at) : <InfinityIcon className="h-4 w-4" />}
-                  </div>
-                  <div className="truncate px-1 text-[10px] uppercase tracking-widest text-text/50">
-                    {t("expires")}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <Button variant="neutral" onClick={() => openEdit(u)} className="w-full">
-                  <Pencil className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{t("edit")}</span>
-                </Button>
-                <Button variant="neutral" onClick={() => copySubLink(u)} className="w-full">
-                  <Link2 className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{t("copy")}</span>
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="neutral" className="w-full">
-                      <MoreVertical className="h-4 w-4 shrink-0" />
-                      <span className="truncate">{t("more")}</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => copySubLink(u)}>
-                      <Copy className="h-4 w-4" />{t("copySubLink")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => window.open(`/sub/${u.sub_token}`, "_blank")}>
-                      <Server className="h-4 w-4" />{t("openSubPage")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => resetMut.mutate(u.id)}>
-                      <RotateCcw className="h-4 w-4" />{t("resetTraffic")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => rotateMut.mutate(u.id)}>
-                      <RefreshCw className="h-4 w-4" />{t("rotateSubToken")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem danger onClick={() => setDeleteTarget(u)}>
-                      <Trash2 className="h-4 w-4" />{t("delete")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="grid min-w-0 gap-3 sm:gap-4 md:grid-cols-2">
+        {users.map((u, idx) => (
+          <div
+            key={u.id}
+            className={cn(users.length % 2 === 1 && idx === users.length - 1 && "md:col-span-2")}
+          >
+            <UserCard u={u} />
+          </div>
         ))}
       </div>
 

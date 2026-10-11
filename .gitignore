@@ -13,4 +13,5 @@ apps/web/dist
 apps/server/dist
 apps/server/public
 xray-bin
+core-bin
 *.tsbuildinfo

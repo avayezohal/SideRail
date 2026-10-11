@@ -6,8 +6,8 @@ import crypto from "node:crypto";
 const dataDir = process.env.SIDERAIL_DATA_DIR || path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-const xrayDir = process.env.XRAY_DIR || path.join(dataDir, "xray");
-if (!fs.existsSync(xrayDir)) fs.mkdirSync(xrayDir, { recursive: true });
+const coreDir = process.env.CORE_DIR || path.join(dataDir, "core");
+if (!fs.existsSync(coreDir)) fs.mkdirSync(coreDir, { recursive: true });
 
 function resolveSecret(): string {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
@@ -24,15 +24,17 @@ function resolveSecret(): string {
 
 export const config = {
   dataDir,
-  xrayDir,
+  coreDir,
   dbPath: path.join(dataDir, "siderail.db"),
-  xrayAccessLog: path.join(xrayDir, "access.log"),
+  coreAccessLog: path.join(coreDir, "access.log"),
   port: Number(process.env.PORT || 8080),
   host: "0.0.0.0",
   jwtSecret: resolveSecret(),
-  xrayVersion: process.env.XRAY_VERSION || "v26.9.9",
-  xrayApiPort: Number(process.env.XRAY_API_PORT || 10085),
-  inboundBasePort: Number(process.env.XRAY_INBOUND_BASE_PORT || 20000),
+  coreVersion: process.env.CORE_VERSION || process.env.XRAY_VERSION || "v26.9.9",
+  coreApiPort: Number(process.env.CORE_API_PORT || process.env.XRAY_API_PORT || 10085),
+  inboundBasePort: Number(
+    process.env.CORE_INBOUND_BASE_PORT || process.env.XRAY_INBOUND_BASE_PORT || 20000,
+  ),
   publicDomain: process.env.PUBLIC_DOMAIN || process.env.RAILWAY_PUBLIC_DOMAIN || "",
   isProd: process.env.NODE_ENV === "production",
   platform: os.platform(),

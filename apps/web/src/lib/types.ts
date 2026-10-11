@@ -18,6 +18,8 @@ export interface AdminInfo {
   permissions: Permission[];
   dataLimit: number;
   createdAt: number;
+  expireAt?: number | null;
+  comment?: string;
   used?: number;
   userCount?: number;
 }
@@ -71,6 +73,7 @@ export interface User {
   online: boolean;
   created_by: number | null;
   creator?: string;
+  creatorRole?: string;
 }
 
 export interface UserSummary {
@@ -151,5 +154,5 @@ export interface SubData {
     comment: string;
   };
   links: SubLink[];
-  history: { ts: number; total: number }[];
+  history: { ts: number; total: number; up?: number; down?: number }[];
 }

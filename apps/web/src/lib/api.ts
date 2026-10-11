@@ -114,10 +114,18 @@ export const api = {
     password: string;
     permissions: string[];
     dataLimit: number;
+    expireDays?: number;
+    comment?: string;
   }) => request("/api/admins", { method: "POST", body: JSON.stringify(payload) }),
   updateAdmin: (
     id: number,
-    payload: { permissions?: string[]; dataLimit?: number; password?: string },
+    payload: {
+      permissions?: string[];
+      dataLimit?: number;
+      password?: string;
+      expireDays?: number;
+      comment?: string;
+    },
   ) => request(`/api/admins/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteAdmin: (id: number) => request(`/api/admins/${id}`, { method: "DELETE" }),
   trafficStats: () =>

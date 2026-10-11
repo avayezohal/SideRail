@@ -41,13 +41,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { formatBytes, formatDate, relativeTime, cn } from "@/lib/utils";
+import { formatBytes, formatDate, relativeTime, cn, d } from "@/lib/utils";
 import type { SubData, SubLink } from "@/lib/types";
 
 const protocolColor: Record<string, string> = {
   vless: "#a3e635",
   vmess: "#7dd3fc",
-  trojan: "#f0abfc",
+  trojan: "#fbbf24",
 };
 
 function useSubData(token: string | undefined) {
@@ -96,11 +96,13 @@ function CopyButton({
   );
 }
 
-function buildChart(history: { ts: number; total: number }[]) {
+function buildChart(history: { ts: number; total: number; up?: number; down?: number }[]) {
   if (!history || history.length < 2) return [];
   return history.map((h) => ({
     ts: h.ts,
     used: h.total,
+    up: h.up ?? 0,
+    down: h.down ?? 0,
   }));
 }
 
@@ -149,9 +151,12 @@ export default function SubscriptionPage() {
     <div className="relative min-h-screen overflow-x-hidden bg-bg pb-16">
       <AnimatedBackground />
 
-      <div className="relative mx-auto w-full min-w-0 max-w-3xl px-4 pt-6 sm:pt-10">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
+      <div className="relative mx-auto w-full min-w-0 max-w-5xl px-4 pt-4 sm:pt-6">
+        <div className="mb-4 flex justify-center sm:justify-end">
+          <SubLangBar />
+        </div>
+        <header className="flex flex-row items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-base border-2 border-border bg-main text-mtext neo-shadow">
               <RailLogo className="h-7 w-7" />
             </div>
@@ -160,7 +165,7 @@ export default function SubscriptionPage() {
               <div className="truncate text-sm font-base text-text/60">{user.email}</div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {user.online ? (
               <Badge variant="success" className="gap-1">
                 <Wifi className="h-3.5 w-3.5" /> {t("online")}
@@ -181,137 +186,178 @@ export default function SubscriptionPage() {
           </div>
         </header>
 
-        <Card className="mt-6 animate-pop-in">
-          <CardContent className="space-y-5 p-5 sm:p-6">
-            <div>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-xs font-heading uppercase tracking-widest text-text/60">{t("dataUsed")}</span>
-                <span className="font-heading text-sm">
-                  {user.dataLimit > 0
-                    ? `${formatBytes(user.total)} / ${formatBytes(user.dataLimit)}`
-                    : formatBytes(user.total)}
-                </span>
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-start">
+          <Card className="min-w-0 animate-pop-in">
+            <CardContent className="space-y-5 p-5 sm:p-6">
+              <div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-xs font-heading uppercase tracking-widest text-text/60">{t("dataUsed")}</span>
+                  <span className="font-heading text-sm">
+                    {user.dataLimit > 0
+                      ? `${formatBytes(user.total)} / ${formatBytes(user.dataLimit)}`
+                      : formatBytes(user.total)}
+                  </span>
+                </div>
+                <Progress
+                  value={user.dataLimit > 0 ? usagePct : 100}
+                  className="mt-2 h-4"
+                  indicatorClassName={
+                    usagePct > 90 ? "bg-red-400" : usagePct > 70 ? "bg-yellow-400" : "bg-main"
+                  }
+                />
+                <div className="mt-1 text-xs font-base text-text/50">
+                  {user.dataLimit > 0 ? `${formatBytes(remaining)} ${t("remainingLabel")}` : t("unlimitedPlan")}
+                </div>
               </div>
-              <Progress
-                value={user.dataLimit > 0 ? usagePct : 100}
-                className="mt-2 h-4"
-                indicatorClassName={
-                  usagePct > 90 ? "bg-red-400" : usagePct > 70 ? "bg-yellow-400" : "bg-main"
-                }
-              />
-              <div className="mt-1 text-xs font-base text-text/50">
-                {user.dataLimit > 0 ? `${formatBytes(remaining)} ${t("remainingLabel")}` : t("unlimitedPlan")}
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <MiniStat
+                  icon={Download}
+                  label={t("download")}
+                  value={formatBytes(user.down)}
+                  accent="#a3e635"
+                />
+                <MiniStat
+                  icon={Upload}
+                  label={t("upload")}
+                  value={formatBytes(user.up)}
+                  accent="#7dd3fc"
+                />
+                <MiniStat
+                  icon={CalendarClock}
+                  label={t("expires")}
+                  value={user.expireAt ? relativeTime(user.expireAt) : t("never")}
+                  accent="#38bdf8"
+                />
+                <MiniStat
+                  icon={Gauge}
+                  label={t("configs")}
+                  value={String(links.length)}
+                  accent="#fbbf24"
+                />
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <MiniStat
-                icon={Download}
-                label={t("download")}
-                value={formatBytes(user.down)}
-                accent="#a3e635"
-              />
-              <MiniStat
-                icon={Upload}
-                label={t("upload")}
-                value={formatBytes(user.up)}
-                accent="#7dd3fc"
-              />
-              <MiniStat
-                icon={CalendarClock}
-                label={t("expires")}
-                value={user.expireAt ? relativeTime(user.expireAt) : t("never")}
-                accent="#fda4af"
-              />
-              <MiniStat
-                icon={Gauge}
-                label={t("configs")}
-                value={String(links.length)}
-                accent="#f0abfc"
-              />
-            </div>
-
-            <div>
-              <span className="mb-2 block text-xs font-heading uppercase tracking-widest text-text/60">{t("usageTrend")}</span>
-              <div className="h-[160px] w-full rounded-base border-2 border-border bg-bg/40 p-2">
-                {chart.length >= 2 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chart} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="usageFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#a3e635" stopOpacity={0.8} />
-                          <stop offset="100%" stopColor="#a3e635" stopOpacity={0.05} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="ts" hide />
-                      <YAxis hide />
-                      <RTooltip
-                        formatter={(v: number) => [formatBytes(v), "Total"]}
-                        labelFormatter={(l: number) =>
-                          new Date(l).toLocaleTimeString(undefined, {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        }
-                        contentStyle={{
-                          border: "2px solid #000",
-                          borderRadius: 8,
-                          background: "#fff",
-                          color: "#000",
-                          fontWeight: 600,
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="used"
-                        stroke="#000"
-                        strokeWidth={2}
-                        fill="url(#usageFill)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-center text-xs font-base text-text/40">
-                    {t("notEnoughData")}
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs font-heading uppercase tracking-widest text-text/60">{t("usageTrend")}</span>
+                  {chart.length >= 2 && (
+                    <div className="flex items-center gap-3 text-[10px] font-heading uppercase tracking-wide">
+                      <span className="flex items-center gap-1 text-text/60">
+                        <span className="h-2 w-2 rounded-full bg-[#a3e635]" /> {t("download")}
+                      </span>
+                      <span className="flex items-center gap-1 text-text/60">
+                        <span className="h-2 w-2 rounded-full bg-[#7dd3fc]" /> {t("upload")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="h-[150px] w-full rounded-base border-2 border-border bg-bg/40 p-2">
+                  {chart.length >= 2 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chart} margin={{ top: 8, right: 8, left: -18, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="downFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#a3e635" stopOpacity={0.7} />
+                            <stop offset="100%" stopColor="#a3e635" stopOpacity={0.04} />
+                          </linearGradient>
+                          <linearGradient id="upFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#7dd3fc" stopOpacity={0.7} />
+                            <stop offset="100%" stopColor="#7dd3fc" stopOpacity={0.04} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="ts" hide />
+                        <YAxis hide />
+                        <RTooltip
+                          formatter={(v: number, name: string) => [
+                            formatBytes(v),
+                            name === "down" ? t("download") : t("upload"),
+                          ]}
+                          labelFormatter={(l: number) =>
+                            new Date(l).toLocaleTimeString(undefined, {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          }
+                          contentStyle={{
+                            border: "2px solid #000",
+                            borderRadius: 8,
+                            background: "#fff",
+                            color: "#000",
+                            fontWeight: 600,
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="down"
+                          stroke="#4d7c0f"
+                          strokeWidth={2}
+                          fill="url(#downFill)"
+                          stackId="1"
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="up"
+                          stroke="#0369a1"
+                          strokeWidth={2}
+                          fill="url(#upFill)"
+                          stackId="1"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-center text-xs font-base text-text/40">
+                      {t("notEnoughData")}
+                    </div>
+                  )}
+                </div>
+                {user.expireAt && (
+                  <div className="mt-2 text-center text-xs font-base text-text/50">
+                    {t("validUntil")} {formatDate(user.expireAt)}
                   </div>
                 )}
               </div>
-              {user.expireAt && (
-                <div className="mt-2 text-center text-xs font-base text-text/50">
-                  {t("validUntil")} {formatDate(user.expireAt)}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <div className="mt-4 space-y-2">
-          <div className="flex min-w-0 items-center gap-2 rounded-base border-2 border-border bg-bw px-3 py-2 neo-shadow">
-            <Link2 className="h-4 w-4 shrink-0 text-text/50" />
-            <span className="truncate font-mono text-xs text-text/80">{subUrl}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <CopyButton value={subUrl} label={t("copySub")} className="w-full" />
-            <Button variant="default" onClick={() => setSubQrOpen(true)} className="w-full">
-              <QrIcon className="h-4 w-4" />
-              QR
-            </Button>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <CopyButton value={subUrl} label="V2ray" className="w-full" />
-            <CopyButton value={`${subUrl}/clash`} label="Clash" className="w-full" />
-            <CopyButton value={`${subUrl}/singbox`} label="Sing-box" className="w-full" />
-          </div>
-          <p className="text-center text-[11px] font-base text-text/40">{t("copyHint")}</p>
+          <Card className="min-w-0 animate-pop-in">
+            <CardContent className="space-y-3 p-5 sm:p-6">
+              <div className="flex items-center gap-2">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-base border-2 border-border bg-main text-mtext">
+                  <Link2 className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-heading text-sm leading-tight">{t("copySub")}</div>
+                  <div className="text-[11px] font-base text-text/50">{t("copyHint")}</div>
+                </div>
+              </div>
+              <div className="flex min-w-0 items-center gap-2 rounded-base border-2 border-border bg-bg/40 px-3 py-2">
+                <span className="truncate font-mono text-xs text-text/80">{subUrl}</span>
+                <CopyButton value={subUrl} icon className="ml-auto" />
+              </div>
+              <Button variant="default" onClick={() => setSubQrOpen(true)} className="w-full">
+                <QrIcon className="h-4 w-4" />
+                {t("subscriptionQr")}
+              </Button>
+              <div className="h-px w-full bg-border/40" />
+              <div className="grid grid-cols-3 gap-2">
+                <CopyButton value={subUrl} label={d("VjJyYXk=")} className="w-full" />
+                <CopyButton value={`${subUrl}/clash`} label={d("Q2xhc2g=")} className="w-full" />
+                <CopyButton value={`${subUrl}/singbox`} label={d("U2luZy1ib3g=")} className="w-full" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <div className="mt-8">
           <h2 className="mb-3 font-heading text-lg">{t("configurations")}</h2>
-          <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {links.map((link, i) => (
               <Card
                 key={`${link.tag}-${i}`}
-                className="animate-fade-in overflow-hidden"
+                className={cn(
+                  "item-lift animate-fade-in overflow-hidden",
+                  i === links.length - 1 && links.length % 2 === 1 && "sm:col-span-2",
+                )}
                 style={{ animationDelay: `${i * 40}ms` }}
               >
                 <CardContent className="flex items-center gap-2.5 p-3 sm:gap-3 sm:p-4">
@@ -322,8 +368,8 @@ export default function SubscriptionPage() {
                     {link.protocol.slice(0, 2)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-heading text-sm sm:text-base">{link.tag}</div>
-                    <Badge variant="neutral" className="mt-0.5 text-[10px] uppercase">
+                    <div className="font-heading text-sm leading-tight sm:text-base">{link.tag}</div>
+                    <Badge variant="neutral" className="mt-1 text-[10px] uppercase">
                       {link.transport}
                     </Badge>
                   </div>
@@ -342,7 +388,7 @@ export default function SubscriptionPage() {
               </Card>
             ))}
             {links.length === 0 && (
-              <Card>
+              <Card className="sm:col-span-2">
                 <CardContent className="py-10 text-center text-text/50">
                   {t("noConfigs")}
                 </CardContent>
@@ -352,7 +398,7 @@ export default function SubscriptionPage() {
         </div>
 
         <footer className="mt-10">
-          <SubFooter />
+          <SubLinksFooter />
         </footer>
       </div>
 
@@ -362,11 +408,7 @@ export default function SubscriptionPage() {
             <DialogTitle className="text-center">{qrConfig?.tag}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4">
-            {qrConfig && <QrCode value={qrConfig.link} size={220} />}
-            <p className="break-all text-center font-mono text-[11px] text-text/50">
-              {qrConfig?.link}
-            </p>
-            {qrConfig && <CopyButton value={qrConfig.link} label={t("copyConfig")} />}
+            {qrConfig && <QrCode value={qrConfig.link} size={240} />}
           </div>
         </DialogContent>
       </Dialog>
@@ -416,10 +458,9 @@ function MiniStat({
   );
 }
 
-function SubFooter() {
+function SubLangBar() {
   const { lang, setLang, t } = useI18n();
   const toast = useToast();
-  const stars = useGitHubStars();
 
   const changeLang = (l: Lang) => {
     if (l === lang) return;
@@ -428,58 +469,61 @@ function SubFooter() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-2">
-      <div className="grid grid-cols-2 gap-2">
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-between gap-2 rounded-base border-2 border-border bg-bw/70 px-3 py-2 font-heading text-xs text-text/80 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-main hover:text-mtext hover:neo-shadow"
+    <div className="inline-flex items-center gap-1 rounded-base border-2 border-border bg-bw/70 p-1 backdrop-blur">
+      <Languages className="ml-1 h-4 w-4 shrink-0 text-text/50" />
+      {LANGUAGES.map((l) => (
+        <button
+          key={l.code}
+          type="button"
+          onClick={() => changeLang(l.code)}
+          className={cn(
+            "rounded-[4px] px-3 py-1.5 text-xs font-heading transition-colors",
+            lang === l.code ? "bg-main text-mtext" : "hover:bg-main/15",
+          )}
         >
-          <span className="flex min-w-0 items-center gap-1.5">
-            <Github className="h-4 w-4 shrink-0" />
-            <span className="truncate">{GITHUB_REPO}</span>
-          </span>
-          <span className="flex shrink-0 items-center gap-1 rounded-[4px] border-2 border-border bg-main px-1.5 text-mtext">
-            <Star className="h-3 w-3" fill="currentColor" />
-            {stars ?? 0}
-          </span>
-        </a>
-        <a
-          href={TELEGRAM_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-center gap-1.5 rounded-base border-2 border-border bg-bw/70 px-3 py-2 font-heading text-xs text-text/80 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-main hover:text-mtext hover:neo-shadow"
-        >
-          <Send className="h-4 w-4 shrink-0" />
-          <span className="truncate">Telegram</span>
-        </a>
-        <a
-          href={`${GITHUB_URL}/releases`}
-          target="_blank"
-          rel="noreferrer"
-          className="col-span-2 flex items-center justify-center gap-1.5 rounded-base border-2 border-border bg-bw/70 px-3 py-2 font-heading text-xs text-text/80 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-main hover:text-mtext hover:neo-shadow"
-        >
-          <Tag className="h-4 w-4 shrink-0" />
-          <span className="truncate">v{PANEL_VERSION}</span>
-        </a>
-      </div>
-      <div className="flex items-center gap-1 rounded-base border-2 border-border bg-bw/70 p-1 backdrop-blur">
-        <Languages className="ml-1 h-4 w-4 shrink-0 text-text/50" />
-        {LANGUAGES.map((l) => (
-          <button
-            key={l.code}
-            type="button"
-            onClick={() => changeLang(l.code)}
-            className={cn(
-              "flex-1 rounded-[4px] px-1 py-1.5 text-xs font-heading transition-colors",
-              lang === l.code ? "bg-main text-mtext" : "hover:bg-main/15",
-            )}
-          >
-            {l.label}
-          </button>
-        ))}
-      </div>
+          {l.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SubLinksFooter() {
+  const stars = useGitHubStars();
+
+  return (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <a
+        href={GITHUB_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-center gap-2 rounded-base border-2 border-border bg-bw/70 px-3 py-2.5 font-heading text-sm text-text/80 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-main hover:text-mtext hover:neo-shadow"
+      >
+        <Github className="h-4 w-4 shrink-0" />
+        <span className="truncate">{GITHUB_REPO}</span>
+        <span className="flex shrink-0 items-center gap-1 rounded-[4px] border-2 border-border bg-main px-1.5 text-mtext">
+          <Star className="h-3 w-3" fill="currentColor" />
+          {stars ?? 0}
+        </span>
+      </a>
+      <a
+        href={TELEGRAM_URL}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-center gap-2 rounded-base border-2 border-border bg-bw/70 px-3 py-2.5 font-heading text-sm text-text/80 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-main hover:text-mtext hover:neo-shadow"
+      >
+        <Send className="h-4 w-4 shrink-0" />
+        <span className="truncate">Telegram</span>
+      </a>
+      <a
+        href={`${GITHUB_URL}/releases`}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center justify-center gap-2 rounded-base border-2 border-border bg-bw/70 px-3 py-2.5 font-heading text-sm text-text/80 backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-main hover:text-mtext hover:neo-shadow"
+      >
+        <Tag className="h-4 w-4 shrink-0" />
+        <span className="truncate">v{PANEL_VERSION}</span>
+      </a>
     </div>
   );
 }

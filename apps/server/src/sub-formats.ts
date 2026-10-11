@@ -1,5 +1,6 @@
 import type { Inbound, UserWithInbounds } from "./types.js";
 import { getSetting } from "./db.js";
+import { configName } from "./links.js";
 
 function cleanAddr(host: string): string {
   const clean = (getSetting("clean_address") || "").trim();
@@ -19,7 +20,8 @@ function net(inbound: Inbound): string {
 function clashProxy(ctx: Ctx): Record<string, unknown> | null {
   const { user, inbound, host } = ctx;
   const addr = cleanAddr(host);
-  const name = `${inbound.tag}`;
+  // Clash proxy names must be unique, so the inbound tag stays as a suffix.
+  const name = `${configName(user)} - ${inbound.tag}`;
   const alpn = user.alpn ? user.alpn.split(",").map((a) => a.trim()) : undefined;
   const wsOpts = {
     path: inbound.path,
@@ -111,7 +113,8 @@ export function buildClashConfig(
 function singboxOutbound(ctx: Ctx): Record<string, unknown> | null {
   const { user, inbound, host } = ctx;
   const addr = cleanAddr(host);
-  const tag = inbound.tag;
+  // Outbound tags must be unique, so the inbound tag stays as a suffix.
+  const tag = `${configName(user)} - ${inbound.tag}`;
   const tls = {
     enabled: true,
     server_name: host,

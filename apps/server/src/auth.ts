@@ -39,6 +39,8 @@ interface AdminRow {
   role: string;
   permissions: string;
   data_limit: number;
+  expire_at: number | null;
+  comment: string;
   token_version: number;
   created_at: number;
 }
@@ -49,6 +51,8 @@ export interface AdminInfo {
   role: "owner" | "admin";
   permissions: Permission[];
   dataLimit: number;
+  expireAt: number | null;
+  comment: string;
   createdAt: number;
 }
 
@@ -63,8 +67,37 @@ function toInfo(row: AdminRow): AdminInfo {
     role: row.role === "owner" ? "owner" : "admin",
     permissions: row.role === "owner" ? ALL_PERMISSIONS : safeParsePerms(row.permissions),
     dataLimit: row.data_limit,
+    expireAt: row.expire_at ?? null,
+    comment: row.comment ?? "",
     createdAt: row.created_at,
   };
+}
+
+export function isAdminExpired(a: { role: string; expireAt?: number | null; expire_at?: number | null }): boolean {
+  if (a.role === "owner") return false;
+  const exp = a.expireAt ?? a.expire_at ?? null;
+  return exp != null && Date.now() > exp;
+}
+
+/**
+ * Disables every client created by an expired (non-owner) admin.
+ * Returns true if any client was newly disabled, so callers can reload Xray.
+ */
+export function enforceAdminExpiry(): boolean {
+  const now = Date.now();
+  const expired = db
+    .prepare(
+      "SELECT id FROM admins WHERE role != 'owner' AND expire_at IS NOT NULL AND expire_at <= ?",
+    )
+    .all(now) as { id: number }[];
+  let changed = false;
+  for (const a of expired) {
+    const info = db
+      .prepare("UPDATE users SET enabled = 0 WHERE created_by = ? AND enabled = 1")
+      .run(a.id);
+    if (info.changes > 0) changed = true;
+  }
+  return changed;
 }
 
 function safeParsePerms(raw: string): Permission[] {
@@ -122,20 +155,37 @@ export function createAdmin(
   password: string,
   permissions: Permission[],
   dataLimit: number,
+  expireDays = 0,
+  comment = "",
 ): { ok: boolean; error?: string } {
   const exists = db.prepare("SELECT id FROM admins WHERE username = ?").get(username);
   if (exists) return { ok: false, error: "username already exists" };
   const hash = bcrypt.hashSync(password, 10);
   const perms = permissions.filter((p) => ALL_PERMISSIONS.includes(p));
+  const expireAt = expireDays > 0 ? Date.now() + expireDays * 86_400_000 : null;
   db.prepare(
-    "INSERT INTO admins (username, password_hash, role, permissions, data_limit, created_at) VALUES (?, ?, 'admin', ?, ?, ?)",
-  ).run(username, hash, JSON.stringify(perms), Math.round(dataLimit * 1024 ** 3), Date.now());
+    "INSERT INTO admins (username, password_hash, role, permissions, data_limit, expire_at, comment, created_at) VALUES (?, ?, 'admin', ?, ?, ?, ?, ?)",
+  ).run(
+    username,
+    hash,
+    JSON.stringify(perms),
+    Math.round(dataLimit * 1024 ** 3),
+    expireAt,
+    comment.slice(0, 200),
+    Date.now(),
+  );
   return { ok: true };
 }
 
 export function updateAdmin(
   id: number,
-  patch: { permissions?: Permission[]; dataLimit?: number; password?: string },
+  patch: {
+    permissions?: Permission[];
+    dataLimit?: number;
+    password?: string;
+    expireDays?: number;
+    comment?: string;
+  },
 ): { ok: boolean; error?: string } {
   const row = db.prepare("SELECT * FROM admins WHERE id = ?").get(id) as AdminRow | undefined;
   if (!row) return { ok: false, error: "not found" };
@@ -146,10 +196,17 @@ export function updateAdmin(
       : row.permissions;
   const dataLimit =
     patch.dataLimit !== undefined ? Math.round(patch.dataLimit * 1024 ** 3) : row.data_limit;
+  const expireAt =
+    patch.expireDays !== undefined
+      ? patch.expireDays > 0
+        ? Date.now() + patch.expireDays * 86_400_000
+        : null
+      : row.expire_at;
+  const comment = patch.comment !== undefined ? patch.comment.slice(0, 200) : row.comment;
   const hash = patch.password ? bcrypt.hashSync(patch.password, 10) : row.password_hash;
   db.prepare(
-    "UPDATE admins SET permissions = ?, data_limit = ?, password_hash = ? WHERE id = ?",
-  ).run(perms, dataLimit, hash, id);
+    "UPDATE admins SET permissions = ?, data_limit = ?, expire_at = ?, comment = ?, password_hash = ? WHERE id = ?",
+  ).run(perms, dataLimit, expireAt, comment, hash, id);
   return { ok: true };
 }
 
@@ -214,6 +271,10 @@ export function authGuard(req: AuthedRequest, res: Response, next: NextFunction)
     const admin = getAdminById(payload.id);
     if (!admin || !row || (payload.tv ?? 0) !== row.token_version) {
       res.status(401).json({ error: "unauthorized" });
+      return;
+    }
+    if (isAdminExpired(admin)) {
+      res.status(403).json({ error: "account expired" });
       return;
     }
     req.admin = admin;

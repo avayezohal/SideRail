@@ -15,7 +15,7 @@ import https from "node:https";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { config } from "./config.js";
-import { buildXrayConfig } from "./xray-config.js";
+import { buildCoreConfig } from "./core-config.js";
 import { db } from "./db.js";
 import { realIpForPort } from "./tunnel.js";
 
@@ -27,7 +27,7 @@ function binName(): string {
 }
 
 function binPath(): string {
-  return path.join(config.xrayDir, binName());
+  return path.join(config.coreDir, binName());
 }
 
 function assetName(): string {
@@ -77,11 +77,11 @@ function unzip(zip: string, dir: string): void {
 export async function ensureBinary(): Promise<boolean> {
   if (fs.existsSync(binPath())) return true;
   try {
-    const version = config.xrayVersion;
+    const version = config.coreVersion;
     const url = `https://github.com/XTLS/Xray-core/releases/download/${version}/${assetName()}`;
-    const tmpZip = path.join(os.tmpdir(), `xray-${Date.now()}.zip`);
+    const tmpZip = path.join(os.tmpdir(), `core-${Date.now()}.zip`);
     await download(url, tmpZip);
-    unzip(tmpZip, config.xrayDir);
+    unzip(tmpZip, config.coreDir);
     fs.rmSync(tmpZip, { force: true });
     if (config.platform !== "win32" && fs.existsSync(binPath())) {
       fs.chmodSync(binPath(), 0o755);
@@ -93,33 +93,33 @@ export async function ensureBinary(): Promise<boolean> {
 }
 
 function writeConfig(): string {
-  const cfg = buildXrayConfig();
-  const file = path.join(config.xrayDir, "config.json");
+  const cfg = buildCoreConfig();
+  const file = path.join(config.coreDir, "config.json");
   fs.writeFileSync(file, JSON.stringify(cfg, null, 2));
   return file;
 }
 
-let xrayStartedAt = 0;
+let coreStartedAt = 0;
 
-export function xrayUptime(): number {
-  return running && xrayStartedAt ? Math.floor((Date.now() - xrayStartedAt) / 1000) : 0;
+export function coreUptime(): number {
+  return running && coreStartedAt ? Math.floor((Date.now() - coreStartedAt) / 1000) : 0;
 }
 
-export async function startXray(): Promise<void> {
+export async function startCore(): Promise<void> {
   const ok = await ensureBinary();
   if (!ok) {
     running = false;
     return;
   }
   const cfgFile = writeConfig();
-  stopXray();
+  stopCore();
   const child = spawn(binPath(), ["run", "-config", cfgFile], {
-    cwd: config.xrayDir,
+    cwd: config.coreDir,
     stdio: "ignore",
   });
   proc = child;
   running = true;
-  xrayStartedAt = Date.now();
+  coreStartedAt = Date.now();
   child.on("exit", () => {
     if (proc === child) {
       proc = null;
@@ -128,7 +128,7 @@ export async function startXray(): Promise<void> {
   });
 }
 
-export function stopXray(): void {
+export function stopCore(): void {
   if (proc) {
     try {
       proc.kill();
@@ -142,7 +142,7 @@ export function stopXray(): void {
 
 let restartTimer: NodeJS.Timeout | null = null;
 
-export function restartXray(): void {
+export function restartCore(): void {
   if (restartTimer) clearTimeout(restartTimer);
   restartTimer = setTimeout(() => {
     restartTimer = null;
@@ -152,7 +152,7 @@ export function restartXray(): void {
     } catch {
       /* noop */
     }
-    void startXray();
+    void startCore();
   }, 800);
 }
 
@@ -160,20 +160,21 @@ export function isRunning(): boolean {
   return running && proc != null && proc.exitCode == null && !proc.killed;
 }
 
-export function xrayVersion(): string {
-  return config.xrayVersion;
+export function coreVersion(): string {
+  return config.coreVersion;
 }
 
 interface StatStub {
   name: string;
-  value: number;
+  // The core omits `value` from its statsquery JSON when the counter is 0.
+  value?: number;
 }
 
 function queryStats(): StatStub[] {
   if (!fs.existsSync(binPath()) || !running) return [];
   const res = spawnSync(
     binPath(),
-    ["api", "statsquery", `--server=127.0.0.1:${config.xrayApiPort}`, "-reset"],
+    ["api", "statsquery", `--server=127.0.0.1:${config.coreApiPort}`, "-reset"],
     { encoding: "utf8", timeout: 5000 },
   );
   if (res.status !== 0 || !res.stdout) return [];
@@ -190,40 +191,47 @@ export function collectTraffic(): void {
   const now = Date.now();
   let serverUp = 0;
   let serverDown = 0;
-  if (stats.length > 0) {
-    const updateUp = db.prepare("UPDATE users SET up = up + ?, online_at = ? WHERE email = ?");
-    const updateDown = db.prepare("UPDATE users SET down = down + ?, online_at = ? WHERE email = ?");
-    const inbUp = db.prepare(
-      "INSERT INTO inbound_traffic (inbound_tag, up, down) VALUES (?, ?, 0) ON CONFLICT(inbound_tag) DO UPDATE SET up = up + excluded.up",
-    );
-    const inbDown = db.prepare(
-      "INSERT INTO inbound_traffic (inbound_tag, up, down) VALUES (?, 0, ?) ON CONFLICT(inbound_tag) DO UPDATE SET down = down + excluded.down",
-    );
-    for (const s of stats) {
-      if (s.value <= 0) continue;
-      const um = s.name.match(/^user>>>(.+)>>>traffic>>>(uplink|downlink)$/);
-      if (um) {
-        const email = um[1];
-        if (um[2] === "uplink") updateUp.run(s.value, now, email);
-        else updateDown.run(s.value, now, email);
-        continue;
-      }
-      const im = s.name.match(/^inbound>>>(.+)>>>traffic>>>(uplink|downlink)$/);
-      if (im) {
-        const tag = im[1];
-        if (tag === "api") continue;
-        if (im[2] === "uplink") {
-          inbUp.run(tag, s.value);
-          serverUp += s.value;
-        } else {
-          inbDown.run(tag, s.value);
-          serverDown += s.value;
+  try {
+    if (stats.length > 0) {
+      const updateUp = db.prepare("UPDATE users SET up = up + ?, online_at = ? WHERE email = ?");
+      const updateDown = db.prepare("UPDATE users SET down = down + ?, online_at = ? WHERE email = ?");
+      const inbUp = db.prepare(
+        "INSERT INTO inbound_traffic (inbound_tag, up, down) VALUES (?, ?, 0) ON CONFLICT(inbound_tag) DO UPDATE SET up = up + excluded.up",
+      );
+      const inbDown = db.prepare(
+        "INSERT INTO inbound_traffic (inbound_tag, up, down) VALUES (?, 0, ?) ON CONFLICT(inbound_tag) DO UPDATE SET down = down + excluded.down",
+      );
+      for (const s of stats) {
+        // `value` may be undefined (the core drops 0 counters from its JSON) and
+        // `undefined <= 0` is false in JS, so guard explicitly with `> 0`.
+        const value = typeof s.value === "number" && s.value > 0 ? s.value : 0;
+        if (value === 0) continue;
+        const um = s.name.match(/^user>>>(.+)>>>traffic>>>(uplink|downlink)$/);
+        if (um) {
+          const email = um[1];
+          if (um[2] === "uplink") updateUp.run(value, now, email);
+          else updateDown.run(value, now, email);
+          continue;
+        }
+        const im = s.name.match(/^inbound>>>(.+)>>>traffic>>>(uplink|downlink)$/);
+        if (im) {
+          const tag = im[1];
+          if (tag === "api") continue;
+          if (im[2] === "uplink") {
+            inbUp.run(tag, value);
+            serverUp += value;
+          } else {
+            inbDown.run(tag, value);
+            serverDown += value;
+          }
         }
       }
     }
+  } finally {
+    // Always persist the samples, even if one stat entry fails to apply.
+    recordServerTraffic(now, serverUp, serverDown);
+    recordUsageHistory(now);
   }
-  recordServerTraffic(now, serverUp, serverDown);
-  recordUsageHistory(now);
 }
 
 function recordServerTraffic(now: number, up: number, down: number): void {
@@ -241,15 +249,17 @@ function recordUsageHistory(now: number): void {
     up: number;
     down: number;
   }[];
-  const insert = db.prepare("INSERT INTO usage_history (user_id, ts, total) VALUES (?, ?, ?)");
-  for (const u of users) insert.run(u.id, now, u.up + u.down);
+  const insert = db.prepare(
+    "INSERT INTO usage_history (user_id, ts, total, up, down) VALUES (?, ?, ?, ?, ?)",
+  );
+  for (const u of users) insert.run(u.id, now, u.up + u.down, u.up, u.down);
   db.prepare("DELETE FROM usage_history WHERE ts < ?").run(now - 24 * 3_600_000);
 }
 
 let logOffset = 0;
 
 export function collectClientIps(): void {
-  const logFile = config.xrayAccessLog;
+  const logFile = config.coreAccessLog;
   if (!fs.existsSync(logFile)) return;
   let size = 0;
   try {

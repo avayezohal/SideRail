@@ -5,7 +5,7 @@ import { useGitHubStars } from "@/components/github-button";
 import { useToast } from "@/components/ui/toast";
 import { useI18n, LANGUAGES, type Lang } from "@/lib/i18n";
 import { GITHUB_URL, GITHUB_REPO, TELEGRAM_URL, PANEL_VERSION } from "@/lib/brand";
-import { cn } from "@/lib/utils";
+import { cn, d } from "@/lib/utils";
 
 /**
  * A bold, modern shell for the Setup and Login pages. A split layout: a loud
@@ -41,7 +41,7 @@ export function AuthShell({
         <div className="absolute inset-0 grid-dots opacity-50" />
         <div className="absolute -left-32 -top-32 h-96 w-96 rounded-full bg-main/30 blur-[110px] animate-[drift1_26s_ease-in-out_infinite]" />
         <div className="absolute -right-24 top-1/3 h-96 w-96 rounded-full bg-sky-400/25 blur-[120px] animate-[drift2_32s_ease-in-out_infinite]" />
-        <div className="absolute bottom-[-10%] left-1/3 h-80 w-80 rounded-full bg-fuchsia-400/20 blur-[110px] animate-[drift3_36s_ease-in-out_infinite]" />
+        <div className="absolute bottom-[-10%] left-1/3 h-80 w-80 rounded-full bg-amber-400/20 blur-[110px] animate-[drift3_36s_ease-in-out_infinite]" />
       </div>
 
       <div className="mx-auto flex min-h-screen max-w-6xl items-center justify-center p-4 lg:p-8">
@@ -56,7 +56,7 @@ export function AuthShell({
               <div>
                 <div className="font-heading text-4xl leading-none tracking-tight">SideRail</div>
                 <div className="mt-1 text-sm font-base text-mtext/70">
-                  Xray-core management panel
+                  {d("WHJheS1jb3JlIG1hbmFnZW1lbnQgcGFuZWw=")}
                 </div>
               </div>
             </div>
