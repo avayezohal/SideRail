@@ -71,11 +71,13 @@ if (fs.existsSync(staticDir)) {
 }
 
 const server = http.createServer((req, res) => {
+  // XHTTP inbound paths live under /api/... as plain HTTP requests, so the
+  // tunnel must get first look before /api is handed to the Express app.
+  if (tryTunnelHttp(req, res)) return;
   if ((req.url || "").startsWith("/api") || (req.url || "").startsWith("/sub")) {
     app(req, res);
     return;
   }
-  if (tryTunnelHttp(req, res)) return;
   app(req, res);
 });
 
