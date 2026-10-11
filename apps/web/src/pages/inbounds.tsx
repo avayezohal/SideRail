@@ -63,18 +63,16 @@ export default function InboundsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-6">
         {inbounds.map((ib, i) => {
           const used = trafficByTag.get(ib.tag) ?? 0;
           const accent = protocolAccent[ib.protocol] || "#a3e635";
           const n = inbounds.length;
-          const remMobile = n % 2;
           const remLg = n % 3;
           const isLast = i === n - 1;
           const isLastTwo = i >= n - 2;
           const span = cn(
             "lg:col-span-2",
-            remMobile === 1 && isLast && "col-span-2",
             remLg === 1 && isLast && "lg:col-span-6",
             remLg === 2 && isLastTwo && "lg:col-span-3",
           );
