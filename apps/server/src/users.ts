@@ -21,6 +21,8 @@ export interface CreateUserInput {
   password?: string;
   fingerprint?: string;
   alpn?: string;
+  fragment?: string;
+  echConfig?: string;
   dataLimit?: number;
   ipLimit?: number;
   expireDays?: number;
@@ -36,6 +38,24 @@ export type UpdateUserInput = Partial<CreateUserInput> & { enabled?: boolean };
 
 function gb(n: number): number {
   return Math.round(n * 1024 * 1024 * 1024);
+}
+
+/** Normalize the user's FinalMask JSON (e.g. {"tcp":[...]}) or "" when empty. */
+function normalizeFragment(fragment?: string): string {
+  const trimmed = (fragment || "").trim();
+  if (!trimmed || trimmed === "[]") return "";
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return trimmed; // store raw string; links only attach when it parses
+  }
+  return JSON.stringify(parsed);
+}
+
+/** Normalize the ECH config list value; empty string means disabled. */
+function normalizeEch(echConfig?: string): string {
+  return (echConfig || "").trim();
 }
 
 function expireFromDays(days?: number): number | null {
@@ -76,9 +96,10 @@ export function createUser(input: CreateUserInput): UserWithInbounds {
   const info = db
     .prepare(
       `INSERT INTO users
-        (email, uuid, password, sub_token, fingerprint, alpn, data_limit, ip_limit,
-         expire_at, sub_expire_days, traffic_reset, telegram_id, comment, enabled, last_reset, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+        (email, uuid, password, sub_token, fingerprint, alpn, fragment, ech_config, data_limit,
+         ip_limit, expire_at, sub_expire_days, traffic_reset, telegram_id, comment, enabled,
+         last_reset, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
     )
     .run(
       input.email,
@@ -87,6 +108,8 @@ export function createUser(input: CreateUserInput): UserWithInbounds {
       nanoid(24),
       input.fingerprint || "chrome",
       input.alpn || "h2,http/1.1",
+      normalizeFragment(input.fragment),
+      normalizeEch(input.echConfig),
       gb(input.dataLimit || 0),
       input.ipLimit || 0,
       expireFromDays(input.expireDays),
@@ -117,6 +140,8 @@ export function updateUser(id: number, input: UpdateUserInput): UserWithInbounds
   if (input.password !== undefined) set("password", input.password);
   if (input.fingerprint !== undefined) set("fingerprint", input.fingerprint);
   if (input.alpn !== undefined) set("alpn", input.alpn);
+  if (input.fragment !== undefined) set("fragment", normalizeFragment(input.fragment));
+  if (input.echConfig !== undefined) set("ech_config", normalizeEch(input.echConfig));
   if (input.dataLimit !== undefined) set("data_limit", gb(input.dataLimit));
   if (input.ipLimit !== undefined) set("ip_limit", input.ipLimit);
   if (input.expireDays !== undefined) set("expire_at", expireFromDays(input.expireDays));

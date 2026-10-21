@@ -30,7 +30,7 @@ import {
 } from "./auth.js";
 import { db, getSetting, setSetting } from "./db.js";
 import { getSystemStats } from "./system.js";
-import { listInbounds, setInboundEnabled, getInbound } from "./inbounds.js";
+import { listInbounds, setInboundEnabled, setInboundAddress, getInbound } from "./inbounds.js";
 import {
   listUsers,
   createUser,
@@ -74,6 +74,8 @@ const userSchema = z.object({
   password: z.string().optional(),
   fingerprint: z.string().optional(),
   alpn: z.string().optional(),
+  fragment: z.string().optional(),
+  echConfig: z.string().optional(),
   dataLimit: z.number().min(0).optional(),
   ipLimit: z.number().min(0).optional(),
   expireDays: z.number().min(0).optional(),
@@ -168,13 +170,23 @@ api.get("/inbounds", (_req, res) => {
 
 api.patch("/inbounds/:id", requirePermission("inbounds"), async (req: AuthedRequest, res) => {
   const id = Number(req.params.id);
-  const body = z.object({ enabled: z.boolean() }).safeParse(req.body);
+  const body = z
+    .object({ enabled: z.boolean().optional(), address: z.string().max(255).optional() })
+    .refine((b) => b.enabled !== undefined || b.address !== undefined, {
+      message: "nothing to update",
+    })
+    .safeParse(req.body);
   if (!body.success || !getInbound(id)) {
     res.status(400).json({ error: "invalid" });
     return;
   }
-  setInboundEnabled(id, body.data.enabled);
-  logActivity(req.admin!.username, "inbound_toggle", `#${id} -> ${body.data.enabled}`);
+  if (body.data.enabled !== undefined) setInboundEnabled(id, body.data.enabled);
+  if (body.data.address !== undefined) {
+    setInboundAddress(id, body.data.address);
+    logActivity(req.admin!.username, "inbound_address", `#${id} -> ${body.data.address.trim()}`);
+  } else {
+    logActivity(req.admin!.username, "inbound_toggle", `#${id} -> ${body.data.enabled}`);
+  }
   restartCore();
   res.json({ ok: true });
 });

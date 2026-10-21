@@ -34,6 +34,7 @@ export function migrate(): void {
       port INTEGER NOT NULL,
       path TEXT NOT NULL,
       host TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL
     );
@@ -46,6 +47,8 @@ export function migrate(): void {
       sub_token TEXT UNIQUE NOT NULL,
       fingerprint TEXT NOT NULL DEFAULT 'chrome',
       alpn TEXT NOT NULL DEFAULT 'h2,http/1.1',
+      fragment TEXT NOT NULL DEFAULT '',
+      ech_config TEXT NOT NULL DEFAULT '',
       data_limit INTEGER NOT NULL DEFAULT 0,
       ip_limit INTEGER NOT NULL DEFAULT 0,
       expire_at INTEGER,
@@ -135,10 +138,23 @@ function migrateColumns(): void {
   if (!names.includes("expire_at")) db.exec("ALTER TABLE admins ADD COLUMN expire_at INTEGER");
   if (!names.includes("comment")) db.exec("ALTER TABLE admins ADD COLUMN comment TEXT NOT NULL DEFAULT ''");
 
+  const inbCols = db.prepare("PRAGMA table_info(inbounds)").all() as { name: string }[];
+  if (!inbCols.map((c) => c.name).includes("address")) {
+    db.exec("ALTER TABLE inbounds ADD COLUMN address TEXT NOT NULL DEFAULT ''");
+  }
+
   const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
-  if (!userCols.map((c) => c.name).includes("created_by")) {
+  const unames = userCols.map((c) => c.name);
+  if (!unames.includes("created_by")) {
     db.exec("ALTER TABLE users ADD COLUMN created_by INTEGER");
   }
+  if (!unames.includes("fragment")) {
+    db.exec("ALTER TABLE users ADD COLUMN fragment TEXT NOT NULL DEFAULT ''");
+  }
+  if (!unames.includes("ech_config")) {
+    db.exec("ALTER TABLE users ADD COLUMN ech_config TEXT NOT NULL DEFAULT ''");
+  }
+  db.exec("UPDATE users SET fragment = '' WHERE fragment = '[]'");
 
   const usageCols = db.prepare("PRAGMA table_info(usage_history)").all() as { name: string }[];
   const uhNames = usageCols.map((c) => c.name);

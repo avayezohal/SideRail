@@ -51,8 +51,8 @@ export function importData(payload: BackupPayload): { users: number; inbounds: n
     db.exec("DELETE FROM user_inbounds; DELETE FROM users; DELETE FROM inbounds;");
 
     const insInbound = db.prepare(
-      `INSERT INTO inbounds (id, tag, protocol, transport, port, path, host, enabled, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO inbounds (id, tag, protocol, transport, port, path, host, address, enabled, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const ib of payload.inbounds) {
       insInbound.run(
@@ -63,6 +63,7 @@ export function importData(payload: BackupPayload): { users: number; inbounds: n
         ib.port,
         ib.path,
         ib.host,
+        ib.address ?? "",
         ib.enabled,
         ib.created_at,
       );
@@ -70,10 +71,10 @@ export function importData(payload: BackupPayload): { users: number; inbounds: n
 
     const insUser = db.prepare(
       `INSERT INTO users
-        (id, email, uuid, password, sub_token, fingerprint, alpn, data_limit, ip_limit,
-         expire_at, sub_expire_days, sub_first_seen, traffic_reset, telegram_id, comment,
-         enabled, up, down, last_reset, online_at, created_by, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (id, email, uuid, password, sub_token, fingerprint, alpn, fragment, ech_config, data_limit,
+         ip_limit, expire_at, sub_expire_days, sub_first_seen, traffic_reset, telegram_id,
+         comment, enabled, up, down, last_reset, online_at, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const u of payload.users) {
       insUser.run(
@@ -84,6 +85,8 @@ export function importData(payload: BackupPayload): { users: number; inbounds: n
         u.sub_token,
         u.fingerprint,
         u.alpn,
+        u.fragment ?? "",
+        u.ech_config ?? "",
         u.data_limit,
         u.ip_limit,
         u.expire_at,

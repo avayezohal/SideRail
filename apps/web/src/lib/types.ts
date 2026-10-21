@@ -42,6 +42,7 @@ export interface Inbound {
   port: number;
   path: string;
   host: string;
+  address: string;
   enabled: number;
   created_at: number;
 }
@@ -54,6 +55,8 @@ export interface User {
   sub_token: string;
   fingerprint: string;
   alpn: string;
+  fragment: string;
+  ech_config: string;
   data_limit: number;
   ip_limit: number;
   expire_at: number | null;
@@ -97,6 +100,8 @@ export interface UserFormValues {
   password?: string;
   fingerprint?: string;
   alpn?: string;
+  fragment?: string;
+  echConfig?: string;
   dataLimit?: number;
   ipLimit?: number;
   expireDays?: number;

@@ -64,6 +64,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ enabled }),
     }),
+  updateInbound: (id: number, patch: { enabled?: boolean; address?: string }) =>
+    request(`/api/inbounds/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
   users: () =>
     request<{ users: import("./types").User[]; summary: import("./types").UserSummary }>(
       "/api/users",

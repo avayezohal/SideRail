@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Dice5, KeyRound, ChevronDown, Settings2, Globe } from "lucide-react";
+import { Dice5, KeyRound, ChevronDown, Settings2, Globe, Plus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -22,9 +22,14 @@ import {
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, type TKey } from "@/lib/i18n";
 import { cn, relativeTime } from "@/lib/utils";
-import type { Inbound, TrafficReset, User, UserFormValues } from "@/lib/types";
+import type {
+  Inbound,
+  TrafficReset,
+  User,
+  UserFormValues,
+} from "@/lib/types";
 
 interface UserFormDialogProps {
   open: boolean;
@@ -34,9 +39,77 @@ interface UserFormDialogProps {
   onSubmit: (values: UserFormValues) => Promise<void>;
 }
 
-const fingerprints = ["chrome", "firefox", "safari", "ios", "android", "edge", "random"];
+const fingerprints = ["chrome", "firefox", "safari", "ios", "android", "edge", "random", "unsafe"];
 const alpnOptions = ["h2,http/1.1", "h2", "http/1.1"];
 const resets: TrafficReset[] = ["never", "daily", "weekly", "monthly"];
+
+/** One anti-DPI fragment entry (FinalMask tcp fragment). */
+interface FragmentEntry {
+  packets: string;
+  lengths: string;
+  delays: string;
+  maxSplit: string;
+}
+
+/** The single built-in preset suggested to users: "Aggressive" (two fragments). */
+const AGGRESSIVE_FRAGMENTS: FragmentEntry[] = [
+  { packets: "tlshello", lengths: "0,104,1", delays: "0", maxSplit: "0" },
+  { packets: "1-1", lengths: "114,1", delays: "1", maxSplit: "11" },
+];
+
+/** Parse a stored FinalMask JSON string into fragment entries for the form. */
+function parseFinalMaskFragment(raw: string): FragmentEntry[] {
+  if (!raw || raw === "" || raw === "[]") return [];
+  try {
+    const obj = JSON.parse(raw) as {
+      tcp?: {
+        type?: string;
+        settings?: {
+          packets?: string;
+          lengths?: string[];
+          delays?: string[];
+          maxSplit?: string;
+        };
+      }[];
+    };
+    if (!Array.isArray(obj.tcp)) return [];
+    return obj.tcp
+      .filter((f) => f && f.type === "fragment" && f.settings && typeof f.settings.packets === "string")
+      .map((f) => ({
+        packets: f.settings!.packets!,
+        lengths: (f.settings!.lengths || []).join(","),
+        delays: (f.settings!.delays || []).join(","),
+        maxSplit: f.settings!.maxSplit || "",
+      }));
+  } catch {
+    return [];
+  }
+}
+
+/** Build the FinalMask JSON string from the form's fragment entries. */
+function buildFinalMaskFragment(fragments: FragmentEntry[]): string {
+  if (fragments.length === 0) return "";
+  const tcp = fragments.map((f) => ({
+    type: "fragment",
+    settings: {
+      packets: f.packets,
+      lengths: f.lengths.split(",").filter(Boolean),
+      delays: f.delays.split(",").filter(Boolean),
+      maxSplit: f.maxSplit,
+    },
+  }));
+  return JSON.stringify({ tcp });
+}
+
+/** ECH config list presets (echConfigList): <name>+<dns scheme> used to fetch ECH config. */
+const echPresets: { id: string; nameKey: TKey; value: string }[] = [
+  { id: "cloudflare-dns", nameKey: "echCloudflareDns", value: "cloudflare-ech.com+udp://1.1.1.1" },
+  { id: "google-dns", nameKey: "echGoogleDns", value: "cloudflare-ech.com+udp://8.8.8.8" },
+  { id: "quad9-dns", nameKey: "echQuad9Dns", value: "cloudflare-ech.com+udp://9.9.9.9" },
+  { id: "google-doh", nameKey: "echGoogleDoh", value: "cloudflare-ech.com+https://dns.google/dns-query" },
+  { id: "cloudflare-doh", nameKey: "echCloudflareDoh", value: "cloudflare-ech.com+https://cloudflare-dns.com/dns-query" },
+  { id: "alidns-doh", nameKey: "echAliDoh", value: "cloudflare-ech.com+https://dns.alidns.com/dns-query" },
+];
 
 function randomToken(len: number): string {
   const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -102,6 +175,8 @@ export function UserFormDialog({
   const [ipLimit, setIpLimit] = React.useState(0);
   const [trafficReset, setTrafficReset] = React.useState<TrafficReset>("never");
   const [comment, setComment] = React.useState("");
+  const [fragments, setFragments] = React.useState<FragmentEntry[]>([]);
+  const [echConfig, setEchConfig] = React.useState("");
   const [inboundIds, setInboundIds] = React.useState<number[]>([]);
   const [showAdvanced, setShowAdvanced] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -124,6 +199,8 @@ export function UserFormDialog({
       );
       setTrafficReset(editing.traffic_reset);
       setComment(editing.comment);
+      setFragments(parseFinalMaskFragment(editing.fragment || ""));
+      setEchConfig(editing.ech_config || "");
       setInboundIds(editing.inbound_ids);
     } else {
       setEmail("");
@@ -136,6 +213,8 @@ export function UserFormDialog({
       setExpireDays(30);
       setTrafficReset("never");
       setComment("");
+      setFragments([]);
+      setEchConfig("");
       setInboundIds(inbounds.filter((i) => i.enabled).map((i) => i.id));
     }
   }, [open, editing, inbounds]);
@@ -164,6 +243,8 @@ export function UserFormDialog({
         password,
         fingerprint,
         alpn,
+        fragment: buildFinalMaskFragment(fragments),
+        echConfig,
         dataLimit,
         ipLimit,
         expireDays,
@@ -374,6 +455,177 @@ export function UserFormDialog({
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="comment">{t("comment")}</Label>
                   <Input id="comment" value={comment} onChange={(e) => setComment(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <Label>{t("fragment")}</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      type="button"
+                      variant="neutral"
+                      size="sm"
+                      className="h-8 whitespace-nowrap px-3 text-xs"
+                      onClick={() => setFragments([...AGGRESSIVE_FRAGMENTS])}
+                    >
+                      {t("aggressive")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="neutral"
+                      size="sm"
+                      className="h-8 whitespace-nowrap px-3 text-xs"
+                      onClick={() =>
+                        setFragments((p) => [
+                          ...p,
+                          { packets: "tlshello", lengths: "", delays: "", maxSplit: "" },
+                        ])
+                      }
+                      disabled={fragments.length >= 2}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> {t("addFragment")}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-text/50">{t("fragmentHint")}</p>
+
+                {fragments.length === 0 ? (
+                  <p className="rounded-base border-2 border-dashed border-border/40 px-3 py-2.5 text-[11px] text-text/50">
+                    {t("noFragment")}
+                  </p>
+                ) : (
+                  fragments.map((f, i) => (
+                    <div
+                      key={i}
+                      className="space-y-4 rounded-base border-2 border-border/50 bg-bg/30 p-4"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-heading text-sm text-text">
+                          {t("fragment")} #{i + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="neutral"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() =>
+                            setFragments((prev) => prev.filter((_, idx) => idx !== i))
+                          }
+                          title={t("removeFragment")}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>{t("packets")}</Label>
+                          <Input
+                            value={f.packets}
+                            onChange={(e) =>
+                              setFragments((prev) =>
+                                prev.map((ff, idx) =>
+                                  idx === i ? { ...ff, packets: e.target.value } : ff,
+                                ),
+                              )
+                            }
+                            placeholder="tlshello"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t("lengths")}</Label>
+                          <Input
+                            value={f.lengths}
+                            onChange={(e) =>
+                              setFragments((prev) =>
+                                prev.map((ff, idx) =>
+                                  idx === i ? { ...ff, lengths: e.target.value } : ff,
+                                ),
+                              )
+                            }
+                            placeholder="0,104,1"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t("delays")}</Label>
+                          <Input
+                            value={f.delays}
+                            onChange={(e) =>
+                              setFragments((prev) =>
+                                prev.map((ff, idx) =>
+                                  idx === i ? { ...ff, delays: e.target.value } : ff,
+                                ),
+                              )
+                            }
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t("maxSplit")}</Label>
+                          <Input
+                            value={f.maxSplit}
+                            onChange={(e) =>
+                              setFragments((prev) =>
+                                prev.map((ff, idx) =>
+                                  idx === i ? { ...ff, maxSplit: e.target.value } : ff,
+                                ),
+                              )
+                            }
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <Label>{t("echConfigList")}</Label>
+                <p className="text-[11px] text-text/50">{t("echHint")}</p>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>{t("preset")}</Label>
+                    <Select
+                      value={
+                        echPresets.some((p) => p.value === echConfig)
+                          ? echPresets.find((p) => p.value === echConfig)!.id
+                          : echConfig
+                            ? "custom"
+                            : "off"
+                      }
+                      onValueChange={(v) => {
+                        if (v === "off") setEchConfig("");
+                        else if (v === "custom") return;
+                        else {
+                          const preset = echPresets.find((p) => p.id === v);
+                          if (preset) setEchConfig(preset.value);
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="off">{t("off")}</SelectItem>
+                        {echPresets.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {t(p.nameKey)}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="custom">{t("custom")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{t("value")}</Label>
+                    <Input
+                      value={echConfig}
+                      onChange={(e) => setEchConfig(e.target.value)}
+                      placeholder={t("echValuePlaceholder")}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

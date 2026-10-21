@@ -44,6 +44,27 @@ export function configName(user: UserWithInbounds): string {
   return `${toBoldAscii("SideRail")} - ${toBoldAscii(user.email)}`;
 }
 
+/**
+ * Encode a user's anti-DPI FinalMask fragment (e.g. {"tcp":[...]}) and ECH
+ * config list as share-link query params. These match the params v2rayN /
+ * 3x-ui emit: `fm` carries the FinalMask JSON, `ech` the echConfigList.
+ */
+function antiDpiQuery(user: UserWithInbounds): Record<string, string> {
+  const q: Record<string, string> = {};
+  const fm = (user.fragment || "").trim();
+  if (fm && fm !== "[]") {
+    try {
+      JSON.parse(fm);
+      q.fm = fm;
+    } catch {
+      // not valid JSON — skip so clients don't choke
+    }
+  }
+  const ech = (user.ech_config || "").trim();
+  if (ech) q.ech = ech;
+  return q;
+}
+
 function commonQuery(ctx: LinkContext): Record<string, string> {
   const { inbound, user, host } = ctx;
   const q: Record<string, string> = {
@@ -60,6 +81,7 @@ function commonQuery(ctx: LinkContext): Record<string, string> {
   } else {
     q.alpn = user.alpn || "h2,http/1.1";
   }
+  Object.assign(q, antiDpiQuery(user));
   return q;
 }
 
@@ -103,6 +125,7 @@ function vmessLink(ctx: LinkContext): string {
     sni: host,
     alpn: isXhttp ? "h2,http/1.1" : "http/1.1",
     fp: user.fingerprint || "chrome",
+    ...antiDpiQuery(user),
   };
   return "vmess://" + Buffer.from(JSON.stringify(obj)).toString("base64");
 }
@@ -118,7 +141,11 @@ export function buildLink(ctx: LinkContext): string {
   }
 }
 
-function resolveAddress(host: string): string {
+function resolveAddress(inbound: Inbound, host: string): string {
+  // Per-inbound custom address wins, then the global clean_address
+  // setting, then the request host (domain).
+  const custom = (inbound.address || "").trim();
+  if (custom) return custom;
   const clean = (getSetting("clean_address") || "").trim();
   return clean || host;
 }
@@ -128,13 +155,12 @@ export function buildUserLinks(
   user: UserWithInbounds,
   inbounds: Inbound[],
 ): { tag: string; protocol: string; transport: string; link: string }[] {
-  const address = resolveAddress(host);
   return inbounds
     .filter((ib) => ib.enabled && user.inbound_ids.includes(ib.id))
     .map((inbound) => ({
       tag: inbound.tag,
       protocol: inbound.protocol,
       transport: inbound.transport,
-      link: buildLink({ host, address, user, inbound }),
+      link: buildLink({ host, address: resolveAddress(inbound, host), user, inbound }),
     }));
 }

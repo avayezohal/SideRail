@@ -52,3 +52,7 @@ export function getInbound(id: number): Inbound | undefined {
 export function setInboundEnabled(id: number, enabled: boolean): void {
   db.prepare("UPDATE inbounds SET enabled = ? WHERE id = ?").run(enabled ? 1 : 0, id);
 }
+
+export function setInboundAddress(id: number, address: string): void {
+  db.prepare("UPDATE inbounds SET address = ? WHERE id = ?").run(address.trim(), id);
+}
