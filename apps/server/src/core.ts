@@ -100,9 +100,33 @@ function writeConfig(): string {
 }
 
 let coreStartedAt = 0;
+let restartTimer: NodeJS.Timeout | null = null;
 
 export function coreUptime(): number {
   return running && coreStartedAt ? Math.floor((Date.now() - coreStartedAt) / 1000) : 0;
+}
+
+interface ManagedChild extends ChildProcess {
+  /** Set when the process is intentionally stopped (manual stop / planned restart). */
+  __stopped?: boolean;
+}
+
+/**
+ * Automatically restarts the core after an unexpected crash.
+ * A short cooldown prevents restarting in a tight loop while still retrying.
+ */
+function scheduleAutoRestart(): void {
+  if (restartTimer) return; // a restart is already pending
+  restartTimer = setTimeout(() => {
+    restartTimer = null;
+    // flush pending traffic counters before the process is replaced
+    try {
+      collectTraffic();
+    } catch {
+      /* noop */
+    }
+    void startCore();
+  }, 3_000);
 }
 
 export async function startCore(): Promise<void> {
@@ -116,20 +140,27 @@ export async function startCore(): Promise<void> {
   const child = spawn(binPath(), ["run", "-config", cfgFile], {
     cwd: config.coreDir,
     stdio: "ignore",
-  });
+  }) as ManagedChild;
   proc = child;
   running = true;
   coreStartedAt = Date.now();
-  child.on("exit", () => {
-    if (proc === child) {
-      proc = null;
-      running = false;
-    }
+  child.__stopped = false;
+  child.on("exit", (code, signal) => {
+    // A newer startCore/restartCore replaced us → this exit is intentional.
+    if (proc !== child) return;
+    proc = null;
+    running = false;
+    if (child.__stopped) return; // intentional stop (stopCore / planned restart)
+    console.warn(
+      `[core] xray exited unexpectedly (code=${code}, signal=${signal ?? "none"}) — auto-restarting`,
+    );
+    scheduleAutoRestart();
   });
 }
 
 export function stopCore(): void {
   if (proc) {
+    (proc as ManagedChild).__stopped = true;
     try {
       proc.kill();
     } catch {
@@ -139,8 +170,6 @@ export function stopCore(): void {
   }
   running = false;
 }
-
-let restartTimer: NodeJS.Timeout | null = null;
 
 export function restartCore(): void {
   if (restartTimer) clearTimeout(restartTimer);
