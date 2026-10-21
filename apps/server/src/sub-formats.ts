@@ -2,7 +2,9 @@ import type { Inbound, UserWithInbounds } from "./types.js";
 import { getSetting } from "./db.js";
 import { configName } from "./links.js";
 
-function cleanAddr(host: string): string {
+function cleanAddr(inbound: Inbound, host: string): string {
+  const custom = (inbound.address || "").trim();
+  if (custom) return custom;
   const clean = (getSetting("clean_address") || "").trim();
   return clean || host;
 }
@@ -19,7 +21,7 @@ function net(inbound: Inbound): string {
 
 function clashProxy(ctx: Ctx): Record<string, unknown> | null {
   const { user, inbound, host } = ctx;
-  const addr = cleanAddr(host);
+  const addr = cleanAddr(inbound, host);
   // Clash proxy names must be unique, so the inbound tag stays as a suffix.
   const name = `${configName(user)} - ${inbound.tag}`;
   const alpn = user.alpn ? user.alpn.split(",").map((a) => a.trim()) : undefined;
@@ -30,6 +32,7 @@ function clashProxy(ctx: Ctx): Record<string, unknown> | null {
 
   if (inbound.protocol === "vless") {
     if (inbound.transport === "xhttp") return null;
+    const httpupgrade = inbound.transport === "httpupgrade";
     return {
       name,
       type: "vless",
@@ -39,10 +42,12 @@ function clashProxy(ctx: Ctx): Record<string, unknown> | null {
       udp: true,
       tls: true,
       servername: host,
-      network: inbound.transport === "httpupgrade" ? "ws" : "ws",
+      network: httpupgrade ? "httpupgrade" : "ws",
       "client-fingerprint": user.fingerprint || "chrome",
       alpn,
-      "ws-opts": wsOpts,
+      ...(httpupgrade
+        ? { "httpupgrade-opts": { path: inbound.path, host } }
+        : { "ws-opts": wsOpts }),
     };
   }
   if (inbound.protocol === "vmess") {
@@ -104,7 +109,7 @@ export function buildClashConfig(
   yaml.push("proxy-groups:");
   yaml.push(`  - name: SideRail`);
   yaml.push(`    type: select`);
-  yaml.push(`    proxies: [${names.join(", ")}]`);
+  yaml.push(`    proxies: [${names.map((n) => JSON.stringify(n)).join(", ")}]`);
   yaml.push("rules:");
   yaml.push("  - MATCH,SideRail");
   return yaml.join("\n");
@@ -112,7 +117,7 @@ export function buildClashConfig(
 
 function singboxOutbound(ctx: Ctx): Record<string, unknown> | null {
   const { user, inbound, host } = ctx;
-  const addr = cleanAddr(host);
+  const addr = cleanAddr(inbound, host);
   // Outbound tags must be unique, so the inbound tag stays as a suffix.
   const tag = `${configName(user)} - ${inbound.tag}`;
   const tls = {
@@ -124,7 +129,9 @@ function singboxOutbound(ctx: Ctx): Record<string, unknown> | null {
   const transport =
     inbound.transport === "xhttp"
       ? { type: "http", path: inbound.path, host: [host] }
-      : { type: "ws", path: inbound.path, headers: { Host: host } };
+      : inbound.transport === "httpupgrade"
+        ? { type: "httpupgrade", path: inbound.path, host }
+        : { type: "ws", path: inbound.path, headers: { Host: host } };
 
   if (inbound.protocol === "vless") {
     return {
