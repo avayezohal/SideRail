@@ -62,7 +62,7 @@ A loud **neobrutalist** UI — thick borders, hard shadows, animated icons — t
 
 **Deploy and forget**
 
-The core engine pulls itself on first boot, the session secret is generated for you, and the DB just works. **Zero environment variables required.**
+The core engine pulls itself on first boot, the session secret is generated for you, the DB just works, and a crashed core restarts itself. **Zero environment variables required.**
 
 </td>
 <td width="50%" valign="top">
@@ -86,11 +86,11 @@ The Owner adds Admins with scoped page access and personal data quotas — and e
 </tr>
 <tr>
 <td valign="top"><b>Users</b></td>
-<td>Rich create form, summary cards, a fully responsive table, live <b>Connected IPs</b>, and per-user actions.</td>
+<td>Rich create form, summary cards, a fully responsive table, live <b>Connected IPs</b>, per-user actions, and per-user <b>Fragment &amp; ECH</b> settings with an aggressive preset and ready DNS presets.</td>
 </tr>
 <tr>
 <td valign="top"><b>Inbounds</b></td>
-<td>Five HTTP inbounds auto-seeded on first boot. Enable or disable only, each with a unique port and a random <code>/api/...</code> path.</td>
+<td>Five HTTP inbounds auto-seeded on first boot, each with a unique port and a random <code>/api/...</code> path. Enable or disable, and override the address with one click — random Railway IPs or a Cloudflare clean-IP pool of 37k+ entries.</td>
 </tr>
 <tr>
 <td valign="top"><b>Activity Log</b></td>
@@ -102,7 +102,7 @@ The Owner adds Admins with scoped page access and personal data quotas — and e
 </tr>
 <tr>
 <td valign="top"><b>Subscription</b></td>
-<td>A gorgeous per-user page with a live usage chart, QR codes and a base64 export for clients.</td>
+<td>A gorgeous per-user page with a live usage chart, QR codes and a base64 export for clients — with correct clash and sing-box configs.</td>
 </tr>
 <tr>
 <td valign="top"><b>Security</b></td>
